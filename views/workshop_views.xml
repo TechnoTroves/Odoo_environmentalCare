@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View -->
+    <record id="view_envcare_workshop_list" model="ir.ui.view">
+        <field name="name">envcare.workshop.list</field>
+        <field name="model">envcare.workshop</field>
+        <field name="arch" type="xml">
+            <list string="Workshops">
+                <field name="name"/>
+                <field name="event_id"/>
+                <field name="workshop_lead_id"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_envcare_workshop_form" model="ir.ui.view">
+        <field name="name">envcare.workshop.form</field>
+        <field name="model">envcare.workshop</field>
+        <field name="arch" type="xml">
+            <form string="Workshop">
+                <header>
+                    <button name="action_approve_lead" string="Approve (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_approve_hr" string="Approve (HR)" type="object" class="oe_highlight" invisible="state != 'workshop_lead_approved'"/>
+                    <button name="action_approve_final" string="Final Approve (Budget/Events)" type="object" class="oe_highlight" invisible="state != 'hr_approved'"/>
+                    <button name="action_close" string="Close Workshop" type="object" invisible="state != 'approved'"/>
+                    
+                    <field name="state" widget="statusbar" statusbar_visible="draft,workshop_lead_approved,hr_approved,approved,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                        <field name="description"/>
+                    </div>
+                    <group string="Draft">
+                        <group>
+                            <group>
+                                <field name="event_id"/>
+                                <field name="workshop_lead_id" options="{'no_create':True}"/>
+                                <field name="workshop_deputy_id" options="{'no_create':True}"/>
+                            </group>
+                            <group>
+                                <label for="date_start" string="Workshop Timing"/>
+                                <div class="o_row">
+                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date_end'}"/>
+                                    <i class="fa fa-long-arrow-right mx-2 text-muted" title="To" aria-label="To"/>
+                                    <field name="date_end"/>
+                                </div>
+                                <field name="event_creator_id"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group>
+                                <field name="sevak_ids" widget="many2many_tags" options="{'no_create': True, 'no_create_edit': True}"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <!-- <page string="Accounts">
+                                <field name="accounts_ids">
+                                    <list editable="bottom">
+                                        <field name="workshop_id" readonly="1"/>
+                                        <field name="name"/>
+                                        <field name="category_id"/>
+                                        <field name="quantity"/>
+                                        <field name="amount"/>
+                                        <field name="bills" widget="many2many_binary"/>
+                                        <field name="sevaks_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                        <field name="remarks"/>
+                                        <field name="re_imbursement"/>
+                                    </list>
+                                </field>
+                            </page> -->
+                            <page string="Workshop Item List">
+                                <field name="items_ids">
+                                    <list editable="bottom">
+                                        <field name="product_id" options="{'no_create':True}"/>
+                                        <field name="qty"/>
+                                        <field name="item_image" class="" widget="image"/>
+                                        <field name="remarks"/>
+                                        <field name="availability" readonly="1" decoration-success="is_available == True" decoration-danger="is_available == False"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                        <field name="pitch_deck" widget="many2many_binary" string=""/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    
+    <!-- Action -->
+    <record id="action_envcare_workshop" model="ir.actions.act_window">
+        <field name="name">Workshops</field>
+        <field name="res_model">envcare.workshop</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    
+    <!-- Menu Item -->
+    <menuitem id="menu_envcare_workshop" name="Workshops" parent="menu_envcare_root" action="action_envcare_workshop" sequence="20"/>
+
+</odoo>
