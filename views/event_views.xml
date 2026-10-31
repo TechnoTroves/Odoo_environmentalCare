@@ -58,8 +58,8 @@
                                 <list editable="bottom">
                                     <field name="event_id" readonly="1"/>
                                     <field name="name"/>
-                                    <field name="workshop_lead_id"/>
-                                    <field name="workshop_deputy_id"/>
+                                    <field name="workshop_lead_id" options="{'no_create':True}"/>
+                                    <field name="workshop_deputy_id" options="{'no_create':True}"/>
                                     <field name="date_start" readonly="1"/>
                                     <field name="date_end" readonly="1"/>
                                     <field name="state"/>
@@ -69,7 +69,7 @@
                         </page>
                     </notebook>
                 </sheet>
-                </chatter>
+                <chatter/>
             </form>
         </field>
     </record>

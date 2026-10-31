@@ -3,6 +3,7 @@ from odoo import models, fields
 class EnvEvents(models.Model):
     _name = "envcare.event"
     _description = "Environmental Care Event"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(
         string="Event Name",

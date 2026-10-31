@@ -4,6 +4,7 @@ from odoo.exceptions import ValidationError
 class EnvWorkshopItems(models.Model):
     _name = "envcare.workshop.items"
     _description = "Environmental Care Workshop Items"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     workshop_id = fields.Many2one(
         "envcare.workshop",
@@ -75,6 +76,7 @@ class EnvWorkshopItems(models.Model):
 class EnvWorkshopAccounts(models.Model):
     _name = "envcare.workshop.accounts"
     _description = "Environmental Care Workshop Accounts"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     workshop_id = fields.Many2one(
         "envcare.workshop",
@@ -132,6 +134,7 @@ class EnvWorkshopAccounts(models.Model):
 class EnvWorkshopAccountsCategories(models.Model):
     _name = "envcare.workshop.accounts.categories"
     _description = "Environmental Care Workshop Accounts Categories"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(
         string="Category Name",
@@ -141,6 +144,7 @@ class EnvWorkshopAccountsCategories(models.Model):
 class EnvWorkshops(models.Model):
     _name = "envcare.workshop"
     _description = "Environmental Care Workshop"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(
         string="Workshop Name",
