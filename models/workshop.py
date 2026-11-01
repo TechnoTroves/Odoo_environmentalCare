@@ -74,7 +74,7 @@ class EnvWorkshopItems(models.Model):
 
 
 class EnvWorkshopBudgets(models.Model):
-    _name = "envcare.workshop.budegts"
+    _name = "envcare.workshop.budgets"
     _description = "Environmental Care Workshop Budgets"
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
@@ -92,7 +92,7 @@ class EnvWorkshopBudgets(models.Model):
     )
 
     category_id = fields.Many2one(
-        "envcare.workshop.accounts.categories",
+        "envcare.workshop.budgets.categories",
         string="Category",
     )
 
@@ -191,6 +191,16 @@ class EnvWorkshopAccounts(models.Model):
 class EnvWorkshopAccountsCategories(models.Model):
     _name = "envcare.workshop.accounts.categories"
     _description = "Environmental Care Workshop Accounts Categories"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+
+    name = fields.Char(
+        string="Category Name",
+        required=True
+    )
+
+class EnvWorkshopBudgetsCategories(models.Model):
+    _name = "envcare.workshop.budgets.categories"
+    _description = "Environmental Care Workshop Budgets Categories"
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(
