@@ -109,12 +109,6 @@ class EnvWorkshopBudgets(models.Model):
         string="Bills",
     )
 
-    sevaks_ids = fields.Many2many(
-        "res.users",
-        string="Sevaks",
-        domain="[('id','in',workshop_id_sevak_ids)]",
-    )
-
     workshop_id_sevak_ids = fields.Many2many(
         "res.users",
         related="workshop_id.sevak_ids",
@@ -123,11 +117,6 @@ class EnvWorkshopBudgets(models.Model):
 
     remarks = fields.Text(
         string="Remarks",
-    )
-
-    re_imbursement = fields.Boolean(
-        string="Re-imbursement Done?",
-        default=False
     )
 
 class EnvWorkshopAccounts(models.Model):
@@ -178,6 +167,11 @@ class EnvWorkshopAccounts(models.Model):
         string="Workshop Sevaks Helper"
     )
 
+    paid_by = fields.Many2one(
+        "res.users",
+        string="Paid By",
+    )
+
     remarks = fields.Text(
         string="Remarks",
     )
@@ -207,6 +201,24 @@ class EnvWorkshopBudgetsCategories(models.Model):
         string="Category Name",
         required=True
     )
+
+class EnvWorkshopDocs(models.Model):
+    _name = "envcare.workshop.docs"
+    _description = "Environmental Care Workshop Documents"
+    _inherit = ['mail.thread','mail.activity.mixin']
+    
+    docs_urls = fields.Char(
+        string="Docs URLs"
+    )
+
+    workshop_id = fields.Many2one(
+        "envcare.workshop",
+        string="Workshop",
+        required=True,
+        readonly=True,
+        ondelete="cascade"
+    )
+
 
 class EnvWorkshops(models.Model):
     _name = "envcare.workshop"
@@ -290,15 +302,68 @@ class EnvWorkshops(models.Model):
         string="Budget"
     )
 
+    pitch_deck = fields.Many2many(
+        "ir.attachment",
+        "workshop_pitch_deck_rel",
+        "workshop_id", 
+        "attachment_id",
+        string="Pitch Deck"
+    )
+
+    process = fields.Html(
+        string="Workshop Process"
+    )
+
+    design_requirements = fields.Html(
+        string="Design Requirements"
+    )
+
+    design_collaterals = fields.Many2many(
+        "ir.attachment",
+        "workshop_design_collaterals_rel",
+        "workshop_id", 
+        "attachment_id",
+        string="Design Collaterals"
+    )
+
+    statistics_product_impact = fields.Html(
+        string="Stats - Product Impact"
+    )
+
+    talkie = fields.Html(
+        string="Talkie"
+    )
+
     accounts_ids = fields.One2many(
         "envcare.workshop.accounts",
         "workshop_id",
         string="Accounts"
     )
 
-    pitch_deck = fields.Many2many(
+    statistics_workshop = fields.Html(
+        string="Stats - Workshop"
+    )
+
+    av_footage = fields.Many2many(
         "ir.attachment",
-        string="Pitch Deck"
+        "workshop_av_footage_rel",
+        "workshop_id", 
+        "attachment_id",
+        string="AV Footage"
+    )
+
+    docs_files = fields.Many2many(
+        "ir.attachment",
+        "workshop_docs_files_rel",
+        "workshop_id", 
+        "attachment_id",
+        string="Docs Files"
+    )
+
+    doc_id = fields.One2many(
+        "envcare.workshop.docs",
+        "workshop_id",
+        string="Document URLs"
     )
 
     @api.model_create_multi

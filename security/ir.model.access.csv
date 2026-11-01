@@ -6,3 +6,4 @@ access_envcare_workshop_budgets_user,envcare.workshop.budgets.user,model_envcare
 access_envcare_workshop_accounts_categories_user,envcare.workshop.accounts.categories.user,model_envcare_workshop_accounts_categories,base.group_user,1,1,1,1
 access_envcare_workshop_budgets_categories_user,envcare.workshop.budgets.categories.user,model_envcare_workshop_budgets_categories,base.group_user,1,1,1,1
 access_envcare_workshop_items_user,envcare.workshop.items.user,model_envcare_workshop_items,base.group_user,1,1,1,1
+access_envcare_workshop_docs_user,envcare.workshop.docs.user,model_envcare_workshop_docs,base.group_user,1,1,1,1

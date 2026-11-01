@@ -85,9 +85,46 @@
                                         <field name="quantity"/>
                                         <field name="amount"/>
                                         <field name="bills" widget="many2many_binary"/>
+                                        <field name="remarks"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                    </group>
+                    <group string="3">
+                        <field name="process"/>
+                        <field name="design_requirements"/>
+                        <field name="design_collaterals" widget="many2many_binary"/>
+                        <field name="statistics_product_impact"/>
+                        <field name="talkie"/>
+                    </group>
+                    <group string="4">
+                        <notebook>
+                            <page string="Accounts">
+                                <field name="accounts_ids">
+                                    <list editable="bottom">
+                                        <field name="workshop_id" readonly="1"/>
+                                        <field name="name"/>
+                                        <field name="category_id"/>
+                                        <field name="quantity"/>
+                                        <field name="amount"/>
+                                        <field name="bills" widget="many2many_binary"/>
                                         <field name="sevaks_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                        <field name="paid_by" options="{'no_create': True}"/>
                                         <field name="remarks"/>
                                         <field name="re_imbursement"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                        <field name="statistics_workshop"/>
+                        <field name="av_footage" widget="many2many_binary"/>
+                        <field name="docs_files" widget="many2many_binary"/>
+                        <notebook>
+                            <page string="Documents">
+                                <field name="doc_id">
+                                    <list editable="bottom">
+                                        <field name="docs_urls" widget="url" placeholder="https://docs.google.com/document/d/"/>
                                     </list>
                                 </field>
                             </page>
