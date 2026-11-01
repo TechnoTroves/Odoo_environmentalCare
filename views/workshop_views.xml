@@ -37,7 +37,7 @@
                         </h1>
                         <field name="description"/>
                     </div>
-                    <group string="Draft">
+                    <group string="1">
                         <group>
                             <group>
                                 <field name="event_id"/>
@@ -60,21 +60,6 @@
                             </group>
                         </group>
                         <notebook>
-                            <!-- <page string="Accounts">
-                                <field name="accounts_ids">
-                                    <list editable="bottom">
-                                        <field name="workshop_id" readonly="1"/>
-                                        <field name="name"/>
-                                        <field name="category_id"/>
-                                        <field name="quantity"/>
-                                        <field name="amount"/>
-                                        <field name="bills" widget="many2many_binary"/>
-                                        <field name="sevaks_ids" widget="many2many_tags" options="{'no_create': True}"/>
-                                        <field name="remarks"/>
-                                        <field name="re_imbursement"/>
-                                    </list>
-                                </field>
-                            </page> -->
                             <page string="Workshop Item List">
                                 <field name="items_ids">
                                     <list editable="bottom">
@@ -87,7 +72,26 @@
                                 </field>
                             </page>
                         </notebook>
+                    </group>
+                    <group string="2">
                         <field name="pitch_deck" widget="many2many_binary" string=""/>
+                        <notebook>
+                            <page string="Budget">
+                                <field name="budgets_ids">
+                                    <list editable="bottom">
+                                        <field name="workshop_id" readonly="1"/>
+                                        <field name="name"/>
+                                        <field name="category_id"/>
+                                        <field name="quantity"/>
+                                        <field name="amount"/>
+                                        <field name="bills" widget="many2many_binary"/>
+                                        <field name="sevaks_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                        <field name="remarks"/>
+                                        <field name="re_imbursement"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
                     </group>
                 </sheet>
                 <chatter/>

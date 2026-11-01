@@ -73,6 +73,63 @@ class EnvWorkshopItems(models.Model):
 
 
 
+class EnvWorkshopBudgets(models.Model):
+    _name = "envcare.workshop.budegts"
+    _description = "Environmental Care Workshop Budgets"
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+
+    workshop_id = fields.Many2one(
+        "envcare.workshop",
+        string="Workshop",
+        required=True,
+        readonly=True,
+        ondelete="cascade"
+    )
+    
+    name = fields.Char(
+        string="Expense Name",
+        required=True
+    )
+
+    category_id = fields.Many2one(
+        "envcare.workshop.accounts.categories",
+        string="Category",
+    )
+
+    quantity = fields.Integer(
+        string="Quantity",
+    )
+
+    amount = fields.Float(
+        string="Expense Amount",
+    )
+
+    bills = fields.Many2many(
+        "ir.attachment",
+        string="Bills",
+    )
+
+    sevaks_ids = fields.Many2many(
+        "res.users",
+        string="Sevaks",
+        domain="[('id','in',workshop_id_sevak_ids)]",
+    )
+
+    workshop_id_sevak_ids = fields.Many2many(
+        "res.users",
+        related="workshop_id.sevak_ids",
+        string="Workshop Sevaks Helper"
+    )
+
+    remarks = fields.Text(
+        string="Remarks",
+    )
+
+    re_imbursement = fields.Boolean(
+        string="Re-imbursement Done?",
+        default=False
+    )
+
 class EnvWorkshopAccounts(models.Model):
     _name = "envcare.workshop.accounts"
     _description = "Environmental Care Workshop Accounts"
@@ -215,6 +272,12 @@ class EnvWorkshops(models.Model):
         "envcare.workshop.items",
         "workshop_id",
         string="Workshop Items"
+    )
+
+    budgets_ids = fields.One2many(
+        "envcare.workshop.budgets",
+        "workshop_id",
+        string="Budget"
     )
 
     accounts_ids = fields.One2many(
