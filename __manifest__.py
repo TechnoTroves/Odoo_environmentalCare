@@ -8,12 +8,13 @@
     'website': '',
     'images': ['static/description/icon.png'],
     'license': 'LGPL-3',
-    'depends': ['base','mail','stock'],
+    'depends': ['base','mail','stock','website'],
     'data': [
         'security/ir.model.access.csv',
         'views/menu_views.xml',
         'views/event_views.xml',
-        'views/workshop_views.xml'
+        'views/workshop_views.xml',
+        'views/website_templates.xml'
     ],
     'installable': True,
     'application': True,

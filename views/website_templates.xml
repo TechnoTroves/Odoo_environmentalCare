@@ -1,0 +1,80 @@
+<odoo>
+    <!-- Event List -->
+    <template id="event_list_template" name="Event List">
+        <t t-call="website.layout">
+            <div class="container my-5">
+                <h1 class="mb-4">Environmental Care Events</h1>
+                <table class="table table-hover table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Event Name</th>
+                            <th>Start Date</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="events" t-as="event">
+                            <tr>
+                                <td><span t-field="event.name"/></td>
+                                <td><span t-field="event.create_date"/></td>
+                                <td><span t-field="event.status"/></td>
+                                <td>
+                                    <a t-att-href="'/event/%s' % event.id" class="btn btn-sm btn-primary">
+                                        View Details
+                                    </a>
+                                </td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </div>
+        </t>
+    </template>
+
+    <!-- Event Details -->
+    <template id="event_detail_template" name="Event Detail">
+        <t t-call="website.layout">
+            <div class="container my-5">
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <h1 t-field="event.name"/>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="/events" class="btn btn-secondary me-2">Back to List</a>
+                        <!-- Edit Button visible based on access -->
+                        <t t-if="can_edit">
+                            <a t-att-href="'/event/edit/%s' % event.id" class="btn btn-warning">
+                                <i class="fa fa-edit"/> Edit Event
+                            </a>
+                        </t>    
+                    </div>
+                </div>
+                <div class="card p-4 shadow-sm">
+                    <p><strong>Description: </strong><span t-field="event.name"/></p>
+                    <p><strong>Created By: </strong><span t-field="event.create_uid.name"/></p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- Event Form -->
+    <template id="event_form_template" name="Event Form">
+        <t t-call="website.layout">
+            <div class="container my-5">
+                <h1 class="mb-4">Edit Event <span t-field="event.name"/></h1>
+                <form t-att-action="'/event/update/%s' % event.id" method="POST" class="card p-4 shadow-sm">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Event Name</label>
+                        <input type="text" class="form-control" name="name" t-att-value="event.name" required="True"/>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a t-att-href="'/event/%s' % event.id" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-success">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+</odoo>
