@@ -25,43 +25,49 @@
                 <header>
                     <button name="action_approve_lead" string="Approve (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'draft'"/>
                     <button name="action_approve_hr" string="Approve (HR)" type="object" class="oe_highlight" invisible="state != 'workshop_lead_approved'"/>
-                    <button name="action_approve_final" string="Final Approve (Budget/Events)" type="object" class="oe_highlight" invisible="state != 'hr_approved'"/>
-                    <button name="action_close" string="Close Workshop" type="object" invisible="state != 'approved'"/>
+                    <button name="action_approve_additional_lead" string="Additional Approved (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'hr_approved'"/>
+                    <button name="action_approve_additional_head" string="Additional Approved (Events Head)" type="object" class="oe_highlight" invisible="state != 'additional_approved'"/>
+                    <button name="action_approve_design_head" string="LIVE Design Details Approved (Events Head)" type="object" class="oe_highlight" invisible="state != 'events_head_additional_approved'"/>
+                    <button name="action_closure" string="Closure (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'events_head_approved_design_details'"/>
+                    <button name="action_close" string="Close Workshop(Events Head)" type="object" invisible="state != 'closure_details'"/>
+                    <button name="action_cancel" string="Cancel Workshop" type="object" invisible="state in ('events_head_approved_design_details', 'closure_details', 'closed', 'canceled')"/>
                     
-                    <field name="state" widget="statusbar" statusbar_visible="draft,workshop_lead_approved,hr_approved,approved,closed"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,workshop_lead_approved,hr_approved,additional_approved,events_head_additional_approved,events_head_approved_design_details,closure_details,closed" invisible="state == 'canceled'"/>
                 </header>
                 <sheet>
+                    <widget name="web_ribbon" title="Canceled" bg_color="bg-danger" invisible="state != 'canceled'"/>
                     <div class="oe_title">
                         <h1>
-                            <field name="name"/>
+                            <field name="name" readonly="state == 'canceled'"/>
                         </h1>
-                        <field name="description"/>
+                        <field name="description" readonly="state == 'canceled'"/>
                     </div>
-                    <group string="1">
+                    <group string="Workshop Details">
                         <group>
                             <group>
-                                <field name="event_id"/>
-                                <field name="workshop_lead_id" options="{'no_create':True}"/>
-                                <field name="workshop_deputy_id" options="{'no_create':True}"/>
+                                <field name="event_id" readonly="state == 'canceled'"/>
+                                <field name="workshop_lead_id" options="{'no_create':True}" readonly="state == 'canceled'"/>
+                                <field name="workshop_deputy_id" options="{'no_create':True}" readonly="state == 'canceled'"/>
                             </group>
                             <group>
                                 <label for="date_start" string="Workshop Timing"/>
                                 <div class="o_row">
-                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date_end'}"/>
+                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date_end'}" readonly="state == 'canceled'"/>
                                     <i class="fa fa-long-arrow-right mx-2 text-muted" title="To" aria-label="To"/>
-                                    <field name="date_end"/>
+                                    <field name="date_end" readonly="state == 'canceled'"/>
                                 </div>
-                                <field name="event_creator_id"/>
+                                <field name="event_creator_id" readonly="state == 'canceled'"/>
                             </group>
                         </group>
                         <group>
                             <group>
-                                <field name="sevak_ids" widget="many2many_tags" options="{'no_create': True, 'no_create_edit': True}"/>
+                                <field name="sevak_ids" widget="many2many_tags" options="{'no_create': True, 'no_create_edit': True}" readonly="state == 'canceled'"/>
+                                <field name="state"/>
                             </group>
                         </group>
                         <notebook>
                             <page string="Workshop Item List">
-                                <field name="items_ids">
+                                <field name="items_ids" readonly="state == 'canceled'">
                                     <list editable="bottom">
                                         <field name="product_id" options="{'no_create':True}"/>
                                         <field name="qty"/>
@@ -73,11 +79,11 @@
                             </page>
                         </notebook>
                     </group>
-                    <group string="2">
-                        <field name="pitch_deck" widget="many2many_binary" string=""/>
+                    <group string="Additional Details" invisible="state in ('draft','workshop_lead_approved')">
+                        <field name="pitch_deck" widget="many2many_binary" string="" readonly="state == 'canceled'"/>
                         <notebook>
                             <page string="Budget">
-                                <field name="budgets_ids">
+                                <field name="budgets_ids" readonly="state == 'canceled'">
                                     <list editable="bottom">
                                         <field name="workshop_id" readonly="1"/>
                                         <field name="name"/>
@@ -91,17 +97,17 @@
                             </page>
                         </notebook>
                     </group>
-                    <group string="3">
-                        <field name="process"/>
-                        <field name="design_requirements"/>
-                        <field name="design_collaterals" widget="many2many_binary"/>
-                        <field name="statistics_product_impact"/>
-                        <field name="talkie"/>
+                    <group string="Live" invisible="state in ('draft','workshop_lead_approved','hr_approved','additional_approved','events_head_additional_approved')">
+                        <field name="process" readonly="state == 'canceled'"/>
+                        <field name="design_requirements" readonly="state == 'canceled'"/>
+                        <field name="design_collaterals" widget="many2many_binary" readonly="state == 'canceled'"/>
+                        <field name="statistics_product_impact" readonly="state == 'canceled'"/>
+                        <field name="talkie" readonly="state == 'canceled'"/>
                     </group>
-                    <group string="4">
+                    <group string="Closure" invisible="state in ('draft','workshop_lead_approved','hr_approved','additional_approved','events_head_additional_approved','events_head_approved_design_details')">
                         <notebook>
                             <page string="Accounts">
-                                <field name="accounts_ids">
+                                <field name="accounts_ids" readonly="state == 'canceled'">
                                     <list editable="bottom">
                                         <field name="workshop_id" readonly="1"/>
                                         <field name="name"/>
@@ -117,12 +123,12 @@
                                 </field>
                             </page>
                         </notebook>
-                        <field name="statistics_workshop"/>
-                        <field name="av_footage" widget="many2many_binary"/>
-                        <field name="docs_files" widget="many2many_binary"/>
+                        <field name="statistics_workshop" readonly="state == 'canceled'"/>
+                        <field name="av_footage" widget="many2many_binary" readonly="state == 'canceled'"/>
+                        <field name="docs_files" widget="many2many_binary" readonly="state == 'canceled'"/>
                         <notebook>
                             <page string="Documents">
-                                <field name="doc_id">
+                                <field name="doc_id" readonly="state == 'canceled'">
                                     <list editable="bottom">
                                         <field name="docs_urls" widget="url" placeholder="https://docs.google.com/document/d/"/>
                                     </list>

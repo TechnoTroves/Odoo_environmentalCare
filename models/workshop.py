@@ -266,16 +266,20 @@ class EnvWorkshops(models.Model):
 
     state = fields.Selection(
         [
+            ("canceled","Canceled"),
             ("draft","Draft"),
             ("workshop_lead_approved","Workshop Lead Approved"),
             ("hr_approved","HR Approved"),
-            ("approved","Fully Approved"),
+            ("additional_approved","Workshop Lead Approved Additional"),
+            ("events_head_additional_approved","Events Head Approved Additional"),
+            ("events_head_approved_design_details","LIVE Events Head Approved Design Details"),
+            ("closure_details","Closure Details Approved"),
             ("closed","Closed")
         ],
         string="Status",
         default="draft",
         required=True,
-        # tracking=True
+        tracking=True
     )
 
     workshop_lead_id = fields.Many2one(
@@ -456,14 +460,30 @@ class EnvWorkshops(models.Model):
     def action_approve_hr(self):
         for record in self:
             record.state = "hr_approved"
-
-    def action_approve_final(self):
-        for record in self:
-            record.state = "approved"
     
+    def action_approve_additional_lead(self):
+        for record in self:
+            record.state = "additional_approved"
+            
+    def action_approve_additional_head(self):
+        for record in self:
+            record.state = "events_head_additional_approved"
+
+    def action_approve_design_head(self):
+        for record in self:
+            record.state = "events_head_approved_design_details"
+
+    def action_closure(self):
+        for record in self:
+            record.state = "closure_details"
+
     def action_close(self):
         for record in self:
             record.state = "closed"
+
+    def action_cancel(self):
+        for record in self:
+            record.state = "canceled"
 
     def action_open_workshop(self):
         self.ensure_one()

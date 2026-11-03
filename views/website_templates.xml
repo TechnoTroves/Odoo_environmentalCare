@@ -9,6 +9,9 @@
                         <tr>
                             <th>Event Name</th>
                             <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Deadline</th>
+                            <th>Location</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
@@ -17,8 +20,11 @@
                         <t t-foreach="events" t-as="event">
                             <tr>
                                 <td><span t-field="event.name"/></td>
-                                <td><span t-field="event.create_date"/></td>
-                                <td><span t-field="event.status"/></td>
+                                <td><span t-field="event.date_begin"/></td>
+                                <td><span t-field="event.date_end"/></td>
+                                <td><span t-field="event.deadline"/></td>
+                                <td><span t-field="event.location"/></td>
+                                <td><span t-field="event.status" t-attf-class="badge #{'text-bg-info bg-info' if event.status == 'draft' else 'text-bg-success bg-success' if event.status == 'live' else 'text-bg-warning bg-warning'}"/></td>
                                 <td>
                                     <a t-att-href="'/event/%s' % event.id" class="btn btn-sm btn-primary">
                                         View Details
@@ -44,14 +50,100 @@
                         <a href="/events" class="btn btn-secondary me-2">Back to List</a>
                         <!-- Edit Button visible based on access -->
                         <t t-if="can_edit">
-                            <a t-att-href="'/event/edit/%s' % event.id" class="btn btn-warning">
+                            <a t-att-href="'/event/edit/%s' % event.id" class="btn btn-primary">
                                 <i class="fa fa-edit"/> Edit Event
                             </a>
                         </t>    
                     </div>
                 </div>
                 <div class="card p-4 shadow-sm">
-                    <p><strong>Description: </strong><span t-field="event.name"/></p>
+                    <p><strong>Event Status: </strong><span t-field="event.status"/></p>
+                    <p><strong>Event Name: </strong><span t-field="event.name"/></p>
+                    <p><strong>Description: </strong><span t-field="event.description"/></p>
+                    <p>
+                        <strong>Event Duration: </strong>
+                        <div>
+                            <span t-field="event.date_begin"/>
+                            <i class="fa fa-long-arrow-right mx-2 text-muted" title="To" aria-labeled="To"/>
+                            <span t-field="event.date_end"/>
+                        </div>
+                    </p>
+                    <p><strong>Location: </strong><span t-field="event.location"/></p>
+                    <p><strong>Deadline: </strong><span t-field="event.deadline"/></p>
+                    <div t-if="event.document_ids" class="mt-4">
+                        <h5>Documents</h5>
+                        <div class="row g-3">
+                            <t t-foreach="event.document_ids" t-as="doc">
+                                <div class="col-md-4">
+                                    <!-- Images -->
+                                    <t t-if="doc.mimetype and doc.mimetype.startswith('image/')">
+                                        <a t-attf-href="/web/image/#{doc.id}" target="_blank">
+                                            <img t-attf-src="/web/image/#{doc.id}"
+                                                class="img-fluid rounded"
+                                                t-att-alt="doc.name"/>
+                                        </a>
+                                        <div class="small mt-1" t-field="doc.name"/>
+                                    </t>
+                                    <!-- Video -->
+                                    <t t-elif="doc.mimetype and doc.mimetype.startswith('video/')">
+                                        <video class="w-100 rounded" controls="controls">
+                                            <source t-attf-src="/web/content/#{doc.id}" t-att-type="doc.mimetype"/>
+                                        </video>
+                                        <div class="small mt-1" t-field="doc.name"/>
+                                    </t>
+                                    <!-- PDF preview + download -->
+                                    <t t-elif="doc.mimetype == 'application/pdf'">
+                                        <iframe t-attf-src="/web/content/#{doc.id}" class="w-100 rounded" height="320"/>
+                                        <a t-attf-href="/web/content/#{doc.id}?download=true" class="d-block mt-1">
+                                            <span t-field="doc.name"/>
+                                        </a>
+                                    </t>
+                                    <!-- Other files: download only -->
+                                    <t t-else="">
+                                        <a t-attf-href="/web/content/#{doc.id}?download=true" class="d-block">
+                                            <i class="fa fa-file-o me-1"/>
+                                            <span t-esc="doc.name"/>
+                                        </a>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                    <div t-if="event.workshop_ids" class="mt-4">
+                        <h5>Workshops</h5>
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Workshop</th>
+                                    <th>Lead</th>
+                                    <th>Deputy</th>
+                                    <th>Timing</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="event.workshop_ids" t-as="workshop">
+                                    <tr>
+                                        <td>
+                                            <span t-field="workshop.name"/>
+                                            <div class="text-muted small" t-if="workshop.description" t-field="workshop.description"/>
+                                        </td>
+                                        <td><span t-field="workshop.workshop_lead_id.name"/></td>
+                                        <td><span t-field="workshop.workshop_deputy_id.name"/></td>
+                                        <td>
+                                            <span t-field="workshop.date_start"/>
+                                            <i class="fa fa-long-arrow-right mx-1 text-muted"/>
+                                            <span t-field="workshop.date_end"/>
+                                        </td>
+                                        <td>
+                                            <span t-field="workshop.state"
+                                                t-attf-class="badge #{'text-bg-secondary bg-secondary' if workshop.state == 'draft' else 'text-bg-danger bg-danger' if workshop.state == 'canceled' else 'text-bg-success bg-success' if workshop.state == 'closed' else 'text-bg-info bg-info'}"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
                     <p><strong>Created By: </strong><span t-field="event.create_uid.name"/></p>
                 </div>
             </div>
