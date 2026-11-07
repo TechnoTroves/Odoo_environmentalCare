@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<odoo>
+    <!-- CATEGORIES -->
+    <record id="module_envcare_category" model="ir.module.category">
+        <field name="name">Environment Care</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="module_event_category" model="ir.module.category">
+        <field name="name">Event</field>
+        <field name="sequence">10</field>
+        <field name="parent_id" ref="environmental_care.module_envcare_category"/>
+    </record>
+
+
+    <!-- GROUPS -->
+    <record id="group_envcare_user" model="res.groups">
+        <field name="name">Environment Care User</field>
+        <field name="category_id" ref="environmental_care.module_envcare_category"/>
+    </record>
+    <record id="group_event_head" model="res.groups">
+        <field name="name">Event Head</field>
+        <field name="category_id" ref="environmental_care.module_event_category"/>
+    </record>
+</odoo>

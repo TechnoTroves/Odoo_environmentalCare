@@ -10,6 +10,7 @@
     'license': 'LGPL-3',
     'depends': ['base','mail','stock','website'],
     'data': [
+        'security/envcare_security.xml',
         'security/ir.model.access.csv',
         'views/menu_views.xml',
         'views/event_views.xml',

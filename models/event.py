@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import api, fields, models
 
 class EnvEvents(models.Model):
     _name = "envcare.event"
@@ -62,6 +62,18 @@ class EnvEvents(models.Model):
         "event_id",
         string="Workshops"
     )
+
+    creator_is_event_head = fields.Boolean(
+        compute="_compute_creator_is_event_head",
+    )
+
+    @api.depends("create_uid")
+    def _compute_creator_is_event_head(self):
+        for record in self:
+            creator = record.create_uid.sudo()
+            record.creator_is_event_head = bool(
+                creator and creator.has_group("environmental_care.group_event_head")
+            )
 
     def action_set_live(self):
         for record in self:
