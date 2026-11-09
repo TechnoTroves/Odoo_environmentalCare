@@ -399,18 +399,17 @@ class EnvWorkshops(models.Model):
                     "Please assign different users for these roles."
                 )
 
-    @api.onchange("workshop_lead_id","workshop_deputy_id")
-    def _onchange_workshop_lead_id(self):
+    @api.onchange("event_id", "date_start", "date_end", "workshop_lead_id", "workshop_deputy_id")
+    def _onchange_event_id(self):
+        # Default workshop timing to the parent event's timing
+        if self.event_id and not self.date_start and not self.date_end:
+            self.date_start = self.event_id.date_begin
+            self.date_end = self.event_id.date_end
+        # Lead and Deputy are always part of the Sevaks
         if self.workshop_lead_id:
             self.sevak_ids |= self.workshop_lead_id
         if self.workshop_deputy_id:
             self.sevak_ids |= self.workshop_deputy_id
-
-    @api.onchange("event_id")
-    def _onchange_event_id(self):
-        if self.event_id and not self.date_start and not self.date_end:
-            self.date_start = self.event_id.date_begin
-            self.date_end = self.event_id.date_end
 
     @api.constrains('sevak_ids','workshop_lead_id','workshop_deputy_id')
     def _check_workshop_lead_in_sevaks(self):
@@ -428,10 +427,6 @@ class EnvWorkshops(models.Model):
 
     @api.constrains('date_start','date_end','event_id')
     def _check_workshop_dates(self):
-        if not self.date_start and not self.date_end:
-            self.date_start = self.event_id.date_begin
-            self.date_end = self.event_id.date_end
-
         for record in self:
             if record.date_start and record.date_end:
                 if record.date_start >= record.date_end:
@@ -446,12 +441,6 @@ class EnvWorkshops(models.Model):
                             f"The workshop timing ({record.date_start} to {record.date_end}) "
                             f"must fall within the parent Event timing ({event.date_begin} to {event.date_end})."
                         )
-
-    @api.onchange("date_start","date_end")
-    def _onchange_event_id(self):
-        if not self.date_start and not self.date_end:
-            self.date_start = self.event_id.date_begin
-            self.date_end = self.event_id.date_end
 
     def action_approve_lead(self):
         for record in self:

@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <odoo>
     <!-- CATEGORIES -->
     <record id="module_envcare_category" model="ir.module.category">
@@ -11,15 +10,63 @@
         <field name="sequence">10</field>
         <field name="parent_id" ref="environmental_care.module_envcare_category"/>
     </record>
-
+    <record id="module_it_category" model="ir.module.category">
+        <field name="name">IT</field>
+        <field name="sequence">20</field>
+        <field name="parent_id" ref="environmental_care.module_envcare_category"/>
+    </record>
 
     <!-- GROUPS -->
+    <!-- Base user of the module. Every department role is built on top of this. -->
     <record id="group_envcare_user" model="res.groups">
         <field name="name">Environment Care User</field>
         <field name="category_id" ref="environmental_care.module_envcare_category"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
     </record>
+    <!-- Events Department: 1 role -->
     <record id="group_event_head" model="res.groups">
         <field name="name">Event Head</field>
         <field name="category_id" ref="environmental_care.module_event_category"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+    </record>
+    <!-- IT Department: 2 roles. Only IT can delete records. -->
+    <record id="group_envcare_it" model="res.groups">
+        <field name="name">IT Sevak</field>
+        <field name="category_id" ref="environmental_care.module_it_category"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+    </record>
+    <record id="group_envcare_it_head" model="res.groups">
+        <field name="name">IT Head</field>
+        <field name="category_id" ref="environmental_care.module_it_category"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+    </record>
+
+    <!-- So the admin is not locked out after upgrading -->
+    <record id="base.user_admin" model="res.users">
+        <field name="groups_id" eval="[(4, ref('environmental_care.group_event_head')), (4, ref('environmental_care.group_envcare_it_head'))]"/>
+    </record>
+
+    <!-- RECORD RULES: EVENTS -->
+    <!-- Every EC user can read every event -->
+    <record id="rule_envcare_event_read_all" model="ir.rule">
+        <field name="name">EC Event: users read all</field>
+        <field name="model_id" ref="model_envcare_event"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <!-- Event Head can create, and edit only the events they created -->
+    <record id="rule_envcare_event_head_own" model="ir.rule">
+        <field name="name">EC Event: head edits own events</field>
+        <field name="model_id" ref="model_envcare_event"/>
+        <field name="domain_force">[('create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_event_head'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
     </record>
 </odoo>

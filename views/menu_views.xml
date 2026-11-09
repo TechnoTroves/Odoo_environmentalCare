@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <menuitem id="menu_envcare_root" name="Environmental Care" sequence="5"/>
+    <menuitem id="menu_envcare_root" name="Environmental Care" sequence="5" groups="environmental_care.group_envcare_user"/>
 </odoo>

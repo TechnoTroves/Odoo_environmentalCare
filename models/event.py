@@ -63,17 +63,20 @@ class EnvEvents(models.Model):
         string="Workshops"
     )
 
-    creator_is_event_head = fields.Boolean(
-        compute="_compute_creator_is_event_head",
+    # True when the logged-in user may edit this event:
+    # they are in Event Head AND (the event is new OR they created it).
+    can_edit = fields.Boolean(
+        compute="_compute_can_edit",
     )
 
     @api.depends("create_uid")
-    def _compute_creator_is_event_head(self):
+    @api.depends_context("uid")
+    def _compute_can_edit(self):
+        user = self.env.user
+        is_head = user.has_group("environmental_care.group_event_head")
         for record in self:
-            creator = record.create_uid.sudo()
-            record.creator_is_event_head = bool(
-                creator and creator.has_group("environmental_care.group_event_head")
-            )
+            is_new = not record._origin.id
+            record.can_edit = is_head and (is_new or record.create_uid == user)
 
     def action_set_live(self):
         for record in self:

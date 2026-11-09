@@ -23,40 +23,39 @@
         <field name="arch" type="xml">
             <form string="Event">
                 <header>
-                    <field name="create_uid" invisible="1"/>
-                    <field name="creator_is_event_head" invisible="1"/>
-                    <button class="oe_highlight" name="action_set_live" string="Set Live" type="object" invisible="create_uid != uid or creator_is_event_head == False or status != 'draft'"/>
-                    <button name="action_set_closed" string="Close Event" type="object" invisible="create_uid != uid or creator_is_event_head == False or status != 'live'"/>
+                    <field name="can_edit" invisible="1"/>
+                    <button class="oe_highlight" name="action_set_live" string="Set Live" type="object" invisible="not can_edit or status != 'draft'"/>
+                    <button name="action_set_closed" string="Close Event" type="object" invisible="not can_edit or status != 'live'"/>
                     <field name="status" widget="statusbar" statusbar_visible="draft,live,closed"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
                         <h1>
-                            <field name="name" placeholder="Event Name" readonly="create_uid != uid or creator_is_event_head == False"/>
+                            <field name="name" placeholder="Event Name" readonly="not can_edit"/>
                         </h1>
-                        <field name="description" readonly="create_uid != uid or creator_is_event_head == False"/>
+                        <field name="description" readonly="not can_edit"/>
                     </div>
                     <group>
                         <group>
                             <label for="date_begin" string="Event Duration"/>
                             <div class="o_row">
-                                <field name="date_begin" widget="daterange" options="{'related_end_date': 'date_end'}" readonly="create_uid != uid or creator_is_event_head == False"/>
+                                <field name="date_begin" widget="daterange" options="{'related_end_date': 'date_end'}" readonly="not can_edit"/>
                                 <i class="fa fa-long-arrow-right mx-2 text-muted" title="To" aria-labeled="To"/>
-                                <field name="date_end" readonly="create_uid != uid or creator_is_event_head == False"/>
+                                <field name="date_end" readonly="not can_edit"/>
                             </div>
-                            <field name="deadline" readonly="create_uid != uid or creator_is_event_head == False"/>
+                            <field name="deadline" readonly="not can_edit"/>
                         </group>
                         <group>
-                            <field name="location" readonly="create_uid != uid or creator_is_event_head == False"/>
-                            <!-- <field name="status" readonly="create_uid != uid or creator_is_event_head == False"/> -->
+                            <field name="location" readonly="not can_edit"/>
+                            <!-- <field name="status" readonly="not can_edit"/> -->
                         </group>
                     </group>
                     <notebook>
                         <page string="Documents">
-                            <field name="document_ids" widget="many2many_binary" readonly="create_uid != uid or creator_is_event_head == False"/>
+                            <field name="document_ids" widget="many2many_binary" readonly="not can_edit"/>
                         </page>
                         <page string="Workshops">
-                            <field name="workshop_ids" readonly="create_uid != uid or creator_is_event_head == False">
+                            <field name="workshop_ids" readonly="not can_edit">
                                 <list editable="bottom">
                                     <field name="event_id" readonly="1"/>
                                     <field name="name"/>
