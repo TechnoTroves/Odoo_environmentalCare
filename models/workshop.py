@@ -1,5 +1,6 @@
-from odoo import api, fields, models
+from odoo import Command, api, fields, models
 from odoo.exceptions import ValidationError
+from odoo.tools import is_html_empty
 
 class EnvWorkshopItems(models.Model):
     _name = "envcare.workshop.items"
@@ -220,6 +221,61 @@ class EnvWorkshopDocs(models.Model):
     )
 
 
+# ---------------------------------------------------------------------------
+# Workshop status flow
+# ---------------------------------------------------------------------------
+# Order the workshop moves through (canceled is outside the flow)
+WORKSHOP_STATE_FLOW = [
+    "draft",
+    "workshop_lead_approved",
+    "hr_approved",
+    "additional_approved",
+    "events_head_additional_approved",
+    "events_head_approved_design_details",
+    "closure_details",
+    "closed",
+]
+
+# Content that must be filled BEFORE a workshop can move INTO a status.
+# Add more statuses here as their rules are decided.
+WORKSHOP_STATE_REQUIRED_FIELDS = {
+    # Ready to be sent to HR for approval
+    "workshop_lead_approved": [
+        "name",
+        "description",
+        "event_id",
+        "workshop_lead_id",
+        "workshop_deputy_id",
+        "date_start",
+        "date_end",
+        "sevak_ids",
+        "items_ids",
+    ],
+}
+
+# The backend header buttons (views/workshop_views.xml), as data:
+#   target status -> (button method, statuses in which that button is visible)
+# The website status dropdown offers exactly what these buttons allow, and
+# applies a choice by calling the same button method - one set of rules.
+WORKSHOP_BUTTONS = {
+    "workshop_lead_approved": ("action_approve_lead", ["draft"]),
+    "hr_approved": ("action_approve_hr", ["workshop_lead_approved"]),
+    "additional_approved": ("action_approve_additional_lead", ["hr_approved"]),
+    "events_head_additional_approved": ("action_approve_additional_head", ["additional_approved"]),
+    "events_head_approved_design_details": ("action_approve_design_head", ["events_head_additional_approved"]),
+    "closure_details": ("action_closure", ["events_head_approved_design_details"]),
+    "closed": ("action_close", ["closure_details"]),
+    # "Cancel Workshop" is hidden once the workshop is LIVE / closing / closed
+    "canceled": ("action_cancel", [
+        "draft", "workshop_lead_approved", "hr_approved",
+        "additional_approved", "events_head_additional_approved",
+    ]),
+}
+
+# Dropdown order: Draft and Canceled first, then the flow
+WORKSHOP_DROPDOWN_ORDER = ["draft", "canceled"] + WORKSHOP_STATE_FLOW[1:]
+
+
 class EnvWorkshops(models.Model):
     _name = "envcare.workshop"
     _description = "Environmental Care Workshop"
@@ -370,25 +426,24 @@ class EnvWorkshops(models.Model):
         string="Document URLs"
     )
 
+    @staticmethod
+    def _add_lead_deputy_to_sevaks(vals):
+        """Put the Lead / Deputy into sevak_ids in the SAME save, so the
+        "must remain in the Sevaks list" check passes (website, imports, code -
+        not only the backend form, where the onchange already does it)."""
+        user_ids = [vals[key] for key in ("workshop_lead_id", "workshop_deputy_id") if vals.get(key)]
+        if not user_ids:
+            return vals
+        commands = list(vals.get("sevak_ids") or [])
+        commands += [Command.link(user_id) for user_id in user_ids]
+        return dict(vals, sevak_ids=commands)
+
     @api.model_create_multi
     def create(self, vals_list):
-        records = super().create(vals_list)
-        for record in records:
-            if record.workshop_lead_id and record.workshop_lead_id not in record.sevak_ids:
-                record.sevak_ids = [(4, record.workshop_lead_id.id)]
-            if record.workshop_deputy_id and record.workshop_deputy_id not in record.sevak_ids:
-                record.sevak_ids = [(4, record.workshop_deputy_id.id)]
-        return records
+        return super().create([self._add_lead_deputy_to_sevaks(vals) for vals in vals_list])
 
     def write(self, vals):
-        res = super().write(vals)
-        if 'workshop_lead_id' in vals or 'workshop_deputy_id' in vals:
-            for record in self:
-                if record.workshop_lead_id and record.workshop_lead_id not in record.sevak_ids:
-                    record.sevak_ids = [(4, record.workshop_lead_id.id)]
-                if record.workshop_deputy_id and record.workshop_deputy_id not in record.sevak_ids:
-                    record.sevak_ids = [(4, record.workshop_deputy_id.id)]
-        return res
+        return super().write(self._add_lead_deputy_to_sevaks(vals))
 
     @api.constrains('workshop_lead_id', 'workshop_deputy_id')
     def _check_lead_and_deputy_distinct(self):
@@ -442,7 +497,62 @@ class EnvWorkshops(models.Model):
                             f"must fall within the parent Event timing ({event.date_begin} to {event.date_end})."
                         )
 
+    # ---------------- status flow helpers ----------------
+    def _get_next_state(self):
+        """The status that comes after the current one (None at the end / canceled)."""
+        self.ensure_one()
+        if self.state not in WORKSHOP_STATE_FLOW:
+            return None
+        index = WORKSHOP_STATE_FLOW.index(self.state)
+        return WORKSHOP_STATE_FLOW[index + 1] if index + 1 < len(WORKSHOP_STATE_FLOW) else None
+
+    def _get_missing_fields_for(self, state):
+        """Labels of the fields still empty before moving into `state`."""
+        self.ensure_one()
+        missing = []
+        for fname in WORKSHOP_STATE_REQUIRED_FIELDS.get(state, []):
+            field = self._fields[fname]
+            value = self[fname]
+            empty = is_html_empty(value) if field.type == "html" else not value
+            if empty:
+                missing.append(field.string)
+        return missing
+
+    def _get_website_state_options(self):
+        """Statuses the website dropdown may offer (authorization - can edit
+        the event - is checked before this by the website form):
+        the current status + every status whose backend button is visible
+        now, except moves whose required content is not filled yet."""
+        self.ensure_one()
+        allowed = {self.state}
+        for target, (_method, visible_in) in WORKSHOP_BUTTONS.items():
+            if self.state in visible_in and not self._get_missing_fields_for(target):
+                allowed.add(target)
+        return [state for state in WORKSHOP_DROPDOWN_ORDER if state in allowed]
+
+    def _apply_website_state(self, target):
+        """Move to `target` through its backend button method, so the same
+        checks run as when the button is clicked in the backend."""
+        self.ensure_one()
+        if target == self.state:
+            return
+        method, visible_in = WORKSHOP_BUTTONS.get(target, (None, []))
+        if not method or self.state not in visible_in:
+            raise ValidationError(f"Workshop '{self.name}' cannot move to that status from its current status.")
+        getattr(self, method)()
+
+    def _check_ready_for(self, state):
+        for record in self:
+            missing = record._get_missing_fields_for(state)
+            if missing:
+                label = dict(record._fields["state"]._description_selection(record.env)).get(state, state)
+                raise ValidationError(
+                    f"Workshop '{record.name}' cannot move to '{label}' yet. "
+                    f"Please fill: {', '.join(missing)}."
+                )
+
     def action_approve_lead(self):
+        self._check_ready_for("workshop_lead_approved")
         for record in self:
             record.state = "workshop_lead_approved"
 

@@ -1,65 +1,242 @@
 <odoo>
+    <!-- =====================================================================
+         REUSABLE TABLE SEARCH COMPONENT
+         Usage:
+           <t t-call="environmental_care.table_search">
+               <t t-set="table_id" t-value="'my_table'"/>          id of the <table>
+               <t t-set="columns" t-value="search_columns"/>       list of dicts:
+                   {'key': 'name', 'label': 'Name', 'type': 'text' | 'number' | 'select',
+                    'options': [(value, label), ...]   <- only for 'select'}
+               <t t-set="default_column" t-value="'name'"/>        optional
+           </t>
+         In the table, mark each searchable cell:
+           <td data-ets-col="name">...</td>
+         Optional raw value (used instead of the visible text):
+           <td data-ets-col="status" t-att-data-ets-value="record.status">...</td>
+         JS: static/src/js/table_search.js
+    ====================================================================== -->
+    <template id="table_search" name="EC Table Search">
+        <t t-set="default_column" t-value="default_column or 'name'"/>
+        <div class="o_envcare_table_search card card-body bg-primary mb-3" t-att-data-table="table_id">
+            <div class="row g-2 align-items-center">
+                <!-- Column to search on -->
+                <div class="col-12 col-md-3">
+                    <select class="form-select o_ets_column" aria-label="Search in column">
+                        <t t-foreach="columns" t-as="col">
+                            <option t-att-value="col['key']"
+                                    t-att-data-type="col.get('type', 'text')"
+                                    t-att-selected="col['key'] == default_column">
+                                <t t-esc="col['label']"/>
+                            </option>
+                        </t>
+                        <option value="__all__" data-type="text">Anywhere</option>
+                    </select>
+                </div>
+
+                <!-- Text mode -->
+                <div class="col o_ets_mode" data-mode="text">
+                    <div class="input-group">
+                        <button type="button" class="btn btn-outline-secondary o_ets_ignore_ws"
+                                aria-pressed="false" title="Ignore white space while searching">
+                            <i class="fa fa-text-width me-1"/>Ignore spaces
+                        </button>
+                        <input type="search" class="form-control o_ets_text" placeholder="Search..."
+                               aria-label="Search text"/>
+                    </div>
+                </div>
+
+                <!-- Numeric mode -->
+                <div class="col o_ets_mode d-none" data-mode="number">
+                    <div class="input-group">
+                        <select class="form-select o_ets_num_op flex-grow-0 w-auto" aria-label="Comparison">
+                            <option value="eq">=</option>
+                            <option value="ne">&#8800;</option>
+                            <option value="gt">&gt;</option>
+                            <option value="lt">&lt;</option>
+                        </select>
+                        <input type="number" step="any" class="form-control o_ets_number"
+                               placeholder="Number" aria-label="Number"/>
+                    </div>
+                </div>
+
+                <!-- Select mode -->
+                <div class="col o_ets_mode d-none" data-mode="select">
+                    <div class="input-group">
+                        <select class="form-select o_ets_sel_op flex-grow-0 w-auto" aria-label="Comparison">
+                            <option value="eq">=</option>
+                            <option value="ne">&#8800;</option>
+                        </select>
+                        <t t-foreach="columns" t-as="col">
+                            <select t-if="col.get('type') == 'select'"
+                                    class="form-select o_ets_values d-none" t-att-data-col="col['key']"
+                                    t-att-aria-label="col['label']">
+                                <option value="">All</option>
+                                <t t-foreach="col.get('options') or []" t-as="opt">
+                                    <option t-att-value="opt[0]"><t t-esc="opt[1]"/></option>
+                                </t>
+                            </select>
+                        </t>
+                    </div>
+                </div>
+
+                <div class="col-auto">
+                    <button type="button" class="btn btn-outline-secondary o_ets_clear">Clear</button>
+                </div>
+                <div class="col-12 col-md-auto small text-light o_ets_count" aria-live="polite"/>
+            </div>
+        </div>
+    </template>
+
+    <!-- =====================================================================
+         REUSABLE HTML (RICH TEXT) INPUT COMPONENT
+         Usage (inside a <form>):
+           <t t-call="environmental_care.html_input">
+               <t t-set="name" t-value="'description'"/>        form field name
+               <t t-set="value" t-value="record.description"/>  current HTML
+               <t t-set="input_id" t-value="'my_id'"/>          optional, for <label for>
+               <t t-set="required" t-value="True"/>             optional
+           </t>
+         The HTML is sent in a hidden input; Odoo Html fields sanitize it on save.
+         JS: static/src/js/html_input.js
+    ====================================================================== -->
+    <template id="html_input" name="EC Html Input">
+        <div class="o_envcare_html_input form-control p-0" t-att-data-required="'1' if required else None">
+            <div class="o_ehi_toolbar flex-wrap gap-1 border-bottom p-1" role="toolbar"
+                 aria-label="Text formatting">
+                <div class="btn-group btn-group-sm btn-light" role="group">
+                    <button type="button" class="btn btn-primary" data-cmd="bold" title="Bold"><i class="fa fa-bold"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="italic" title="Italic"><i class="fa fa-italic"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="underline" title="Underline"><i class="fa fa-underline"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="strikeThrough" title="Strikethrough"><i class="fa fa-strikethrough"/></button>
+                </div>
+                <div class="btn-group btn-group-sm btn-light" role="group">
+                    <button type="button" class="btn btn-primary" data-cmd="formatBlock" data-value="P" title="Normal text">P</button>
+                    <button type="button" class="btn btn-primary" data-cmd="formatBlock" data-value="H2" title="Heading">H2</button>
+                    <button type="button" class="btn btn-primary" data-cmd="formatBlock" data-value="H3" title="Sub-heading">H3</button>
+                    <button type="button" class="btn btn-primary" data-cmd="formatBlock" data-value="BLOCKQUOTE" title="Quote"><i class="fa fa-quote-right"/></button>
+                </div>
+                <div class="btn-group btn-group-sm btn-light" role="group">
+                    <button type="button" class="btn btn-primary" data-cmd="insertUnorderedList" title="Bulleted list"><i class="fa fa-list-ul"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="insertOrderedList" title="Numbered list"><i class="fa fa-list-ol"/></button>
+                </div>
+                <div class="btn-group btn-group-sm btn-light" role="group">
+                    <button type="button" class="btn btn-primary" data-cmd="createLink" title="Add link"><i class="fa fa-link"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="unlink" title="Remove link"><i class="fa fa-chain-broken"/></button>
+                    <button type="button" class="btn btn-primary" data-cmd="removeFormat" title="Clear formatting"><i class="fa fa-eraser"/></button>
+                </div>
+            </div>
+            <div class="o_ehi_editable p-2" contenteditable="true" role="textbox" aria-multiline="true"
+                 t-att-id="input_id" style="min-height: 160px; outline: none;"><t t-out="value or ''"/></div>
+            <input type="hidden" class="o_ehi_value" t-att-name="name" t-att-value="value or ''"/>
+        </div>
+        <div class="invalid-feedback">This field is required.</div>
+    </template>
+
+    <!-- =====================================================================
+         REUSABLE FLOATING ACTION BUTTONS (bottom-right, round, icon only)
+         Usage:
+           <t t-call="environmental_care.fab_buttons">
+               <t t-set="buttons" t-value="[
+                   {'href': '/x/new', 'icon': 'fa-plus', 'title': 'Add'},
+                   {'href': '/x/edit/1', 'icon': 'fa-pencil', 'title': 'Edit', 'class': 'btn-secondary'},
+               ]"/>
+           </t>
+         Keys: href, icon (Font Awesome class), title (tooltip + screen readers),
+               class (optional Bootstrap button class, default btn-primary).
+         The first button sits at the bottom; the rest stack above it.
+    ====================================================================== -->
+    <template id="fab_buttons" name="EC FAB Buttons">
+        <div t-if="buttons" class="o_envcare_fab_stack position-fixed d-flex flex-column-reverse align-items-center gap-3"
+             style="right: 1.5rem; bottom: 1.5rem; z-index: 1030;">
+            <t t-foreach="buttons" t-as="fab">
+                <a t-att-href="fab['href']"
+                   t-attf-class="btn #{fab.get('class') or 'btn-primary'} rounded-circle shadow d-flex align-items-center justify-content-center p-0"
+                   style="width: 56px; height: 56px;"
+                   t-att-title="fab['title']" t-att-aria-label="fab['title']">
+                    <i t-attf-class="fa #{fab['icon']} fa-lg" aria-hidden="true"/>
+                </a>
+            </t>
+        </div>
+    </template>
+
     <!-- Event List -->
     <template id="event_list_template" name="Event List">
         <t t-call="website.layout">
-            <div class="container my-5">
+            <div class="container my-5 pb-5">
                 <h1 class="mb-4">Environmental Care Events</h1>
-                <table class="table table-hover table-striped">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Event Name</th>
-                            <th>Start Date</th>
-                            <th>End Date</th>
-                            <th>Deadline</th>
-                            <th>Location</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <t t-foreach="events" t-as="event">
+
+                <t t-call="environmental_care.table_search">
+                    <t t-set="table_id" t-value="'envcare_event_table'"/>
+                    <t t-set="columns" t-value="search_columns"/>
+                </t>
+
+                <div class="table-responsive">
+                    <table id="envcare_event_table" class="table table-hover table-striped">
+                        <thead class="table-dark">
                             <tr>
-                                <td><span t-field="event.name"/></td>
-                                <td><span t-field="event.date_begin"/></td>
-                                <td><span t-field="event.date_end"/></td>
-                                <td><span t-field="event.deadline"/></td>
-                                <td><span t-field="event.location"/></td>
-                                <td><span t-field="event.status" t-attf-class="badge #{'text-bg-info bg-info' if event.status == 'draft' else 'text-bg-success bg-success' if event.status == 'live' else 'text-bg-warning bg-warning'}"/></td>
-                                <td>
-                                    <a t-att-href="'/event/%s' % event.id" class="btn btn-sm btn-primary">
-                                        View Details
-                                    </a>
-                                </td>
+                                <th>Event Name</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Deadline</th>
+                                <th>Location</th>
+                                <th>Status</th>
+                                <th>Action</th>
                             </tr>
-                        </t>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="events" t-as="event">
+                                <tr>
+                                    <td data-ets-col="name"><span t-field="event.name"/></td>
+                                    <td data-ets-col="date_begin"><span t-field="event.date_begin"/></td>
+                                    <td data-ets-col="date_end"><span t-field="event.date_end"/></td>
+                                    <td data-ets-col="deadline"><span t-field="event.deadline"/></td>
+                                    <td data-ets-col="location"><span t-field="event.location"/></td>
+                                    <td data-ets-col="status" t-att-data-ets-value="event.status">
+                                        <span t-field="event.status" t-attf-class="badge #{'bg-info' if event.status == 'draft' else 'bg-success' if event.status == 'live' else 'bg-warning'}"/>
+                                    </td>
+                                    <td>
+                                        <a t-att-href="'/event/%s' % event.id" class="btn btn-sm btn-primary">
+                                            View Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            </t>
+                            <tr t-if="not events">
+                                <td colspan="7" class="text-center text-muted">No events yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            <!-- Add: only for users who can create events -->
+            <t t-call="environmental_care.fab_buttons">
+                <t t-set="buttons" t-value="[{'href': '/event/new', 'icon': 'fa-plus', 'title': 'Add Event'}] if can_create else []"/>
+            </t>
         </t>
     </template>
 
     <!-- Event Details -->
     <template id="event_detail_template" name="Event Detail">
         <t t-call="website.layout">
-            <div class="container my-5">
+            <div class="container my-5 pb-5">
                 <div class="row mb-4">
+                    <div class="col-md-4 justify-self-center">
+                        <a href="/events" class="btn btn-secondary" title="Back to list" aria-label="Back to list">
+                            <i class="fa fa-long-arrow-left fa-lg" aria-hidden="true"/>
+                        </a>
+                    </div>
                     <div class="col-md-8">
                         <h1 t-field="event.name"/>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <a href="/events" class="btn btn-secondary me-2">Back to List</a>
-                        <!-- Edit Button visible based on access -->
-                        <t t-if="can_edit">
-                            <a t-att-href="'/event/edit/%s' % event.id" class="btn btn-primary">
-                                <i class="fa fa-edit"/> Edit Event
-                            </a>
-                        </t>    
                     </div>
                 </div>
                 <div class="card p-4 shadow-sm">
                     <p><strong>Event Status: </strong><span t-field="event.status"/></p>
                     <p><strong>Event Name: </strong><span t-field="event.name"/></p>
-                    <p><strong>Description: </strong><span t-field="event.description"/></p>
+                    <div class="mb-3">
+                        <strong>Description:</strong>
+                        <div class="o_envcare_html_view" t-field="event.description"/>
+                    </div>
                     <p>
                         <strong>Event Duration: </strong>
                         <div>
@@ -147,26 +324,262 @@
                     <p><strong>Created By: </strong><span t-field="event.create_uid.name"/></p>
                 </div>
             </div>
+
+            <!-- Edit: only for users who can edit this event -->
+            <t t-call="environmental_care.fab_buttons">
+                <t t-set="buttons" t-value="[{'href': '/event/edit/%s' % event.id, 'icon': 'fa-pencil', 'title': 'Edit Event'}] if can_edit else []"/>
+            </t>
         </t>
     </template>
 
-    <!-- Event Form -->
+    <!-- Event Form (used for both Add and Edit) -->
     <template id="event_form_template" name="Event Form">
         <t t-call="website.layout">
-            <div class="container my-5">
-                <h1 class="mb-4">Edit Event <span t-field="event.name"/></h1>
-                <form t-att-action="'/event/update/%s' % event.id" method="POST" class="card p-4 shadow-sm">
+            <div class="container my-5" style="max-width: 860px;">
+                <h1 class="mb-4">
+                    <t t-if="event">Edit Event <span t-field="event.name"/></t>
+                    <t t-else="">Add Event</t>
+                </h1>
+                <div t-if="error" class="alert alert-danger" role="alert"><t t-esc="error"/></div>
+                <form t-att-action="form_action" method="POST" enctype="multipart/form-data" class="card p-4 shadow-sm">
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <div class="mb-3">
-                        <label for="name" class="form-label">Event Name</label>
-                        <input type="text" class="form-control" name="name" t-att-value="event.name" required="True"/>
+                        <label for="ets_name" class="form-label">Event Name *</label>
+                        <input id="ets_name" type="text" class="form-control" name="name"
+                               t-att-value="values.get('name')" required="required"/>
                     </div>
+                    <div class="mb-3">
+                        <label for="ets_description" class="form-label">Description *</label>
+                        <t t-call="environmental_care.html_input">
+                            <t t-set="input_id" t-value="'ets_description'"/>
+                            <t t-set="name" t-value="'description'"/>
+                            <t t-set="value" t-value="values.get('description')"/>
+                            <t t-set="required" t-value="True"/>
+                        </t>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="ets_date_begin" class="form-label">Start *</label>
+                            <input id="ets_date_begin" type="datetime-local" class="form-control" name="date_begin"
+                                   t-att-value="values.get('date_begin')" required="required"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="ets_date_end" class="form-label">End *</label>
+                            <input id="ets_date_end" type="datetime-local" class="form-control" name="date_end"
+                                   t-att-value="values.get('date_end')" required="required"/>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="ets_deadline" class="form-label">Deadline *</label>
+                            <input id="ets_deadline" type="date" class="form-control" name="deadline"
+                                   t-att-value="values.get('deadline')" required="required"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="ets_location" class="form-label">Location *</label>
+                            <input id="ets_location" type="text" class="form-control" name="location"
+                                   t-att-value="values.get('location')" required="required"/>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="ets_status" class="form-label">Status</label>
+                            <select id="ets_status" name="status" class="form-select">
+                                <option t-foreach="status_options" t-as="opt" t-att-value="opt[0]"
+                                        t-att-selected="opt[0] == (values.get('status') or 'draft')"><t t-esc="opt[1]"/></option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- ===== Documents ===== -->
+                    <div class="mb-4">
+                        <label for="ets_documents" class="form-label">Documents</label>
+                        <ul t-if="event and event.document_ids" class="list-group mb-2">
+                            <li t-foreach="event.document_ids" t-as="doc"
+                                class="list-group-item d-flex justify-content-between align-items-center">
+                                <a t-attf-href="/web/content/#{doc.id}?download=true" class="text-truncate me-3">
+                                    <i class="fa fa-paperclip me-1"/><t t-esc="doc.name"/>
+                                </a>
+                                <div class="form-check mb-0 flex-shrink-0">
+                                    <input class="form-check-input" type="checkbox" name="doc_remove"
+                                           t-att-value="doc.id" t-attf-id="doc_remove_#{doc.id}"/>
+                                    <label class="form-check-label small" t-attf-for="doc_remove_#{doc.id}">Remove</label>
+                                </div>
+                            </li>
+                        </ul>
+                        <input id="ets_documents" type="file" name="documents" multiple="multiple" class="form-control"/>
+                        <div class="form-text">You can select several files at once.</div>
+                    </div>
+
+                    <!-- ===== Workshops ===== -->
+                    <div class="mb-4 o_envcare_rows">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="form-label mb-0">Workshops</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary o_er_add">
+                                <i class="fa fa-plus me-1"/>Add Workshop
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-1">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width: 160px;">Name *</th>
+                                        <th style="min-width: 150px;">Lead *</th>
+                                        <th style="min-width: 150px;">Deputy *</th>
+                                        <th style="min-width: 190px;">Start</th>
+                                        <th style="min-width: 190px;">End</th>
+                                        <th style="min-width: 190px;">Status</th>
+                                        <th class="text-center"><span class="visually-hidden">Remove</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Existing workshops -->
+                                    <t t-if="event">
+                                        <tr t-foreach="event.workshop_ids" t-as="ws">
+                                            <td><input type="text" class="form-control form-control-sm" required="required"
+                                                       t-attf-name="ws_#{ws.id}_name" t-att-value="ws.name" aria-label="Workshop name"/></td>
+                                            <td><select class="form-select form-select-sm" t-attf-name="ws_#{ws.id}_lead" required="required" aria-label="Lead">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="sevak == ws.workshop_lead_id"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                            <td><select class="form-select form-select-sm" t-attf-name="ws_#{ws.id}_deputy" required="required" aria-label="Deputy">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="sevak == ws.workshop_deputy_id"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                            <td><input type="datetime-local" class="form-control form-control-sm" aria-label="Start"
+                                                       t-attf-name="ws_#{ws.id}_start" t-att-value="to_input_dt(ws.date_start)"/></td>
+                                            <td><input type="datetime-local" class="form-control form-control-sm" aria-label="End"
+                                                       t-attf-name="ws_#{ws.id}_end" t-att-value="to_input_dt(ws.date_end)"/></td>
+                                            <td>
+                                                <t t-set="st" t-value="ws_status.get(ws.id, {})"/>
+                                                <div class="input-group input-group-sm flex-nowrap">
+                                                    <select class="form-select form-select-sm" t-attf-name="ws_#{ws.id}_state" aria-label="Status">
+                                                        <option t-foreach="st.get('options', [])" t-as="opt" t-att-value="opt[0]"
+                                                                t-att-selected="opt[0] == ws.state"><t t-esc="opt[1]"/></option>
+                                                    </select>
+                                                    <!-- "i" button: what is needed for the next status -->
+                                                    <!-- fixed strategy so the table's scroll area does not clip the popup -->
+                                                    <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                                            data-bs-popper-config='{"strategy": "fixed"}'
+                                                            t-attf-class="btn rounded-end #{'btn-warning' if st.get('missing') else 'btn-secondary'}"
+                                                            title="Status info" aria-label="Status info">
+                                                        <i class="fa fa-info"/>
+                                                    </button>
+                                                    <div class="dropdown-menu dropdown-menu-end p-3 small" style="min-width: 260px; max-width: 320px;">
+                                                        <t t-if="st.get('missing')">
+                                                            <div class="fw-bold mb-1 badge bg-warning">
+                                                                <i class="fa fa-exclamation-triangle me-1"/>Not ready for <t t-esc="st['next_label']"/>
+                                                            </div>
+                                                            <div class="mb-1">Please fill:</div>
+                                                            <ul class="mb-0 ps-3">
+                                                                <li t-foreach="st['missing']" t-as="field_label"><t t-esc="field_label"/></li>
+                                                            </ul>
+                                                        </t>
+                                                        <t t-elif="st.get('next_label')">
+                                                            <i class="fa fa-check text-success me-1"/>
+                                                            Next step: <strong t-esc="st['next_label']"/>
+                                                        </t>
+                                                        <t t-else="">No further steps for this workshop.</t>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <div t-if="can_delete_workshops" class="form-check d-inline-block mb-0" title="Delete this workshop">
+                                                    <input class="form-check-input" type="checkbox" t-attf-name="ws_#{ws.id}_delete"
+                                                           value="1" aria-label="Delete workshop"/>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <!-- New workshops typed before a save error -->
+                                    <tr t-foreach="new_workshops" t-as="nw">
+                                        <td><input type="text" class="form-control form-control-sm" name="ws_new_name" required="required"
+                                                   t-att-value="nw['name']" aria-label="Workshop name"/></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_lead" required="required" aria-label="Lead">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="str(sevak.id) == nw['lead']"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_deputy" required="required" aria-label="Deputy">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="str(sevak.id) == nw['deputy']"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                        <td><input type="datetime-local" class="form-control form-control-sm" name="ws_new_start"
+                                                   t-att-value="nw['start']" aria-label="Start"/></td>
+                                        <td><input type="datetime-local" class="form-control form-control-sm" name="ws_new_end"
+                                                   t-att-value="nw['end']" aria-label="End"/></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_state" aria-label="Status">
+                                                <option value="draft" selected="selected">Draft</option>
+                                            </select></td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-link text-danger o_er_remove" title="Remove row">
+                                                <i class="fa fa-times"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- Blank row copied by "Add Workshop" (disabled = not submitted) -->
+                                    <tr class="o_er_template d-none">
+                                        <td><input type="text" class="form-control form-control-sm" name="ws_new_name" required="required"
+                                                   disabled="disabled" aria-label="Workshop name"/></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_lead" required="required" disabled="disabled" aria-label="Lead">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="False"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_deputy" required="required" disabled="disabled" aria-label="Deputy">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                        t-att-selected="False"><t t-esc="sevak.name"/></option>
+                                            </select></td>
+                                        <td><input type="datetime-local" class="form-control form-control-sm" name="ws_new_start"
+                                                   disabled="disabled" aria-label="Start"/></td>
+                                        <td><input type="datetime-local" class="form-control form-control-sm" name="ws_new_end"
+                                                   disabled="disabled" aria-label="End"/></td>
+                                        <td><select class="form-select form-select-sm" name="ws_new_state" disabled="disabled" aria-label="Status">
+                                                <option value="draft" selected="selected">Draft</option>
+                                            </select></td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-link text-danger o_er_remove" title="Remove row">
+                                                <i class="fa fa-times"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-text">
+                            Leave Start / End empty to use the event's dates.
+                            <t t-if="can_delete_workshops">Tick the box at the end of a row to delete that workshop.</t>
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-between">
-                        <a t-att-href="'/event/%s' % event.id" class="btn btn-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-success">Save Changes</button>
+                        <a t-att-href="('/event/%s' % event.id) if event else '/events'" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-success">
+                            <t t-if="event">Save Changes</t><t t-else="">Create Event</t>
+                        </button>
                     </div>
                 </form>
             </div>
         </t>
+    </template>
+
+    <!-- =====================================================================
+         Hide every way into the backend for users other than IT / Admin
+    ====================================================================== -->
+    <!-- Top-left "Odoo Apps" grid + "Editor" button on website pages -->
+    <template id="hide_backend_nav" inherit_id="website.layout" name="EC: Backend nav only for IT / Admin">
+        <xpath expr="//div[hasclass('o_frontend_to_backend_nav')]" position="attributes">
+            <attribute name="groups">base.group_system,environmental_care.group_envcare_it</attribute>
+        </xpath>
+    </template>
+
+    <!-- "Apps" link in the user menu (top right, under the user's name) -->
+    <template id="hide_backend_user_menu_link" inherit_id="portal.user_dropdown" name="EC: Apps link only for IT / Admin">
+        <xpath expr="//a[@id='o_backend_user_dropdown_link']" position="attributes">
+            <attribute name="groups">base.group_system,environmental_care.group_envcare_it</attribute>
+        </xpath>
     </template>
 </odoo>

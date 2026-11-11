@@ -15,8 +15,17 @@
         'views/menu_views.xml',
         'views/event_views.xml',
         'views/workshop_views.xml',
+        'views/hr_views.xml',
         'views/website_templates.xml'
     ],
+    'assets': {
+        'web.assets_frontend': [
+            'environmental_care/static/src/js/table_search.js',
+            'environmental_care/static/src/js/html_input.js',
+            'environmental_care/static/src/js/row_editor.js',
+            'environmental_care/static/src/scss/html_input.scss',
+        ],
+    },
     'installable': True,
     'application': True,
     'auto_install': False,

@@ -10,6 +10,11 @@
         <field name="sequence">10</field>
         <field name="parent_id" ref="environmental_care.module_envcare_category"/>
     </record>
+    <record id="module_hr_category" model="ir.module.category">
+        <field name="name">HR</field>
+        <field name="sequence">15</field>
+        <field name="parent_id" ref="environmental_care.module_envcare_category"/>
+    </record>
     <record id="module_it_category" model="ir.module.category">
         <field name="name">IT</field>
         <field name="sequence">20</field>
@@ -29,11 +34,23 @@
         <field name="category_id" ref="environmental_care.module_event_category"/>
         <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
     </record>
-    <!-- IT Department: 2 roles. Only IT can delete records. -->
+    <!-- HR Department: 2 roles (Sevak, Head). Manage Sevak Master Records. -->
+    <record id="group_envcare_hr_sevak" model="res.groups">
+        <field name="name">HR Sevak</field>
+        <field name="category_id" ref="environmental_care.module_hr_category"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+    </record>
+    <record id="group_envcare_hr_head" model="res.groups">
+        <field name="name">HR Head</field>
+        <field name="category_id" ref="environmental_care.module_hr_category"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_hr_sevak'))]"/>
+    </record>
+    <!-- IT Department: 2 roles (Sevak, Head). Full access to every model. Only IT can delete. -->
+    <!-- IT is also Odoo Settings admin (base.group_system) so it can install / upgrade modules -->
     <record id="group_envcare_it" model="res.groups">
         <field name="name">IT Sevak</field>
         <field name="category_id" ref="environmental_care.module_it_category"/>
-        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="implied_ids" eval="[(4, ref('environmental_care.group_envcare_user')), (4, ref('base.group_system'))]"/>
     </record>
     <record id="group_envcare_it_head" model="res.groups">
         <field name="name">IT Head</field>
@@ -43,7 +60,7 @@
 
     <!-- So the admin is not locked out after upgrading -->
     <record id="base.user_admin" model="res.users">
-        <field name="groups_id" eval="[(4, ref('environmental_care.group_event_head')), (4, ref('environmental_care.group_envcare_it_head'))]"/>
+        <field name="groups_id" eval="[(4, ref('environmental_care.group_event_head')), (4, ref('environmental_care.group_envcare_it_head')), (4, ref('environmental_care.group_envcare_hr_head'))]"/>
     </record>
 
     <!-- RECORD RULES: EVENTS -->
@@ -69,4 +86,76 @@
         <field name="perm_create" eval="True"/>
         <field name="perm_unlink" eval="False"/>
     </record>
+    <!-- IT can read / edit / delete every event (overrides the head-own rule) -->
+    <record id="rule_envcare_event_it_all" model="ir.rule">
+        <field name="name">EC Event: IT full access</field>
+        <field name="model_id" ref="model_envcare_event"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- ================= HR DATA ================= -->
+    <!-- Sevak Sr No: SEV-0001, SEV-0002 ... -->
+    <data noupdate="1">
+        <record id="seq_envcare_sevak" model="ir.sequence">
+            <field name="name">Sevak Sr No</field>
+            <field name="code">envcare.sevak</field>
+            <field name="prefix">SEV-</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+
+    <!-- Departments (Master Lists) -->
+    <record id="dept_operations" model="envcare.hr.department"><field name="name">Operations</field><field name="sequence">1</field></record>
+    <record id="dept_events" model="envcare.hr.department"><field name="name">Events</field><field name="sequence">2</field></record>
+    <record id="dept_projects" model="envcare.hr.department"><field name="name">Projects</field><field name="sequence">3</field></record>
+    <record id="dept_accounts" model="envcare.hr.department"><field name="name">Accounts</field><field name="sequence">4</field></record>
+    <record id="dept_hr" model="envcare.hr.department"><field name="name">HR</field><field name="sequence">5</field></record>
+    <record id="dept_im" model="envcare.hr.department"><field name="name">IM</field><field name="sequence">6</field></record>
+    <record id="dept_design" model="envcare.hr.department"><field name="name">Design</field><field name="sequence">7</field></record>
+    <record id="dept_content" model="envcare.hr.department"><field name="name">Content</field><field name="sequence">8</field></record>
+    <record id="dept_research" model="envcare.hr.department"><field name="name">Research</field><field name="sequence">9</field></record>
+    <record id="dept_infra" model="envcare.hr.department"><field name="name">Infra</field><field name="sequence">10</field></record>
+    <record id="dept_it" model="envcare.hr.department"><field name="name">IT</field><field name="sequence">11</field></record>
+
+    <!-- Roles -> Groups. Departments with no role yet: members only get Environment Care User. -->
+    <record id="role_events_head" model="envcare.hr.department.role">
+        <field name="name">Head</field>
+        <field name="department_id" ref="dept_events"/>
+        <field name="group_id" ref="group_event_head"/>
+    </record>
+
+    <record id="role_it_sevak" model="envcare.hr.department.role">
+        <field name="name">Sevak</field>
+        <field name="sequence">1</field>
+        <field name="department_id" ref="dept_it"/>
+        <field name="group_id" ref="group_envcare_it"/>
+    </record>
+    <record id="role_it_head" model="envcare.hr.department.role">
+        <field name="name">Head</field>
+        <field name="sequence">2</field>
+        <field name="department_id" ref="dept_it"/>
+        <field name="group_id" ref="group_envcare_it_head"/>
+    </record>
+
+    <record id="role_hr_sevak" model="envcare.hr.department.role">
+        <field name="name">Sevak</field>
+        <field name="sequence">1</field>
+        <field name="department_id" ref="dept_hr"/>
+        <field name="group_id" ref="group_envcare_hr_sevak"/>
+    </record>
+    <record id="role_hr_head" model="envcare.hr.department.role">
+        <field name="name">Head</field>
+        <field name="sequence">2</field>
+        <field name="department_id" ref="dept_hr"/>
+        <field name="group_id" ref="group_envcare_hr_head"/>
+    </record>
+
+    <!-- On install / upgrade: fill Departments / Roles from the groups users already have -->
+    <function model="res.users" name="_envcare_sync_all_from_groups"/>
 </odoo>

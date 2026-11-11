@@ -73,10 +73,11 @@ class EnvEvents(models.Model):
     @api.depends_context("uid")
     def _compute_can_edit(self):
         user = self.env.user
+        is_it = user.has_group("environmental_care.group_envcare_it")
         is_head = user.has_group("environmental_care.group_event_head")
         for record in self:
             is_new = not record._origin.id
-            record.can_edit = is_head and (is_new or record.create_uid == user)
+            record.can_edit = is_it or (is_head and (is_new or record.create_uid == user))
 
     def action_set_live(self):
         for record in self:

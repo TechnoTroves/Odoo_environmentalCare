@@ -1,0 +1,41 @@
+// Rich-text input (template environmental_care.html_input, JS html_input.js)
+
+.o_envcare_html_input {
+
+    // The toolbar only shows while the field (or one of its buttons) has focus
+    .o_ehi_toolbar {
+        display: none;
+        // Sticks to the top of the screen while scrolling a long text.
+        // --o-ehi-sticky-top = height of a fixed website header (set in JS).
+        position: sticky;
+        top: var(--o-ehi-sticky-top, 0px);
+        z-index: 3;
+        background-color: var(--bs-body-bg, transparent);
+        border-top-left-radius: inherit;
+        border-top-right-radius: inherit;
+    }
+
+    &:focus-within .o_ehi_toolbar {
+        display: flex;
+    }
+
+    // Word-like "pressed" state for the formatting at the cursor
+    .o_ehi_toolbar .btn.active {
+        box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.35);
+        filter: brightness(0.8);
+    }
+
+    .o_ehi_editable {
+
+        h2,
+        h3 {
+            margin-top: 0.5rem;
+        }
+
+        blockquote {
+            border-left: 4px solid var(--bs-border-color, #25ff0069);
+            padding-left: 0.75rem;
+            color: var(--bs-secondary-color, #6c757d);
+        }
+    }
+}

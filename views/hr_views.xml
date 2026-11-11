@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============ SEVAK MASTER RECORD (res.users) ============ -->
+    <record id="view_envcare_sevak_list" model="ir.ui.view">
+        <field name="name">envcare.sevak.list</field>
+        <field name="model">res.users</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Sevak Master Records">
+                <field name="envcare_sr_no"/>
+                <field name="name"/>
+                <field name="envcare_contact"/>
+                <field name="login" string="Email / Login"/>
+                <field name="envcare_department_ids" widget="many2many_tags"/>
+                <field name="envcare_role_ids" widget="many2many_tags"/>
+                <field name="envcare_arpit_group_id" optional="show"/>
+                <field name="envcare_committed_hours_id" optional="hide"/>
+                <field name="envcare_expertise_ids" widget="many2many_tags" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_envcare_sevak_form" model="ir.ui.view">
+        <field name="name">envcare.sevak.form</field>
+        <field name="model">res.users</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <form string="Sevak Master Record">
+                <sheet>
+                    <!-- Sevak photo (the user's profile picture) -->
+                    <field name="image_1920" widget="image" class="oe_avatar"
+                           options="{'preview_image': 'avatar_128'}"/>
+                    <div class="oe_title">
+                        <label for="envcare_sr_no" string="Sr No"/>
+                        <h3><field name="envcare_sr_no" placeholder="Given when a department is set"/></h3>
+                        <h1><field name="name" required="1" placeholder="Name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Personal Details">
+                            <field name="envcare_contact" required="1"/>
+                            <field name="login" string="Email" required="1" widget="email"/>
+                            <field name="envcare_dob" required="1"/>
+                            <field name="envcare_age" readonly="1"/>
+                            <field name="envcare_gid" required="1"/>
+                            <field name="envcare_address" required="1"/>
+                        </group>
+                        <group string="Seva Details">
+                            <field name="envcare_arpit_group_id" required="1" options="{'no_create': True}"/>
+                            <field name="envcare_committed_hours_id" required="1" options="{'no_create': True}"/>
+                            <field name="envcare_expertise_ids" widget="many2many_tags" required="1"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                    <separator string="Departments &amp; Roles"/>
+                    <field name="envcare_department_line_ids" required="1">
+                        <list editable="bottom">
+                            <field name="department_id" options="{'no_create': True}"/>
+                            <field name="role_id" options="{'no_create': True}"
+                                   placeholder="Leave empty for a plain sevak"/>
+                        </list>
+                    </field>
+                    <group>
+                        <group string="Allergies / Badha">
+                            <field name="envcare_allergies" nolabel="1" colspan="2"
+                                   placeholder="Food, medical, restrictions..."/>
+                        </group>
+                        <group string="One-time QR">
+                            <field name="envcare_qr_image" widget="image" nolabel="1" colspan="2"
+                                   options="{'size': [180, 180]}"/>
+                            <div class="text-muted" colspan="2">Upload the sevak's QR image.</div>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_envcare_sevak_search" model="ir.ui.view">
+        <field name="name">envcare.sevak.search</field>
+        <field name="model">res.users</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <search string="Sevaks">
+                <field name="name"/>
+                <field name="envcare_sr_no"/>
+                <field name="envcare_department_ids"/>
+                <field name="envcare_expertise_ids"/>
+                <filter name="no_department" string="No Department" domain="[('envcare_department_line_ids', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_department" string="Department" context="{'group_by': 'envcare_department_ids'}"/>
+                    <filter name="group_role" string="Role" context="{'group_by': 'envcare_role_ids'}"/>
+                    <filter name="group_arpit" string="Arpit Group" context="{'group_by': 'envcare_arpit_group_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_envcare_sevak" model="ir.actions.act_window">
+        <field name="name">Sevak Master Records</field>
+        <field name="res_model">res.users</field>
+        <field name="view_mode">list,form</field>
+        <!-- Only Environmental Care Users (every EC role implies this group) -->
+        <field name="domain" eval="[('share', '=', False), ('groups_id', 'in', [ref('environmental_care.group_envcare_user')])]"/>
+        <field name="search_view_id" ref="view_envcare_sevak_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_envcare_sevak_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_envcare_sevak_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No sevaks yet</p>
+            <p>Create a sevak here. IT / admin sends the password invite.</p>
+        </field>
+    </record>
+
+    <!-- ============ DEPARTMENTS & ROLES ============ -->
+    <record id="view_envcare_hr_department_list" model="ir.ui.view">
+        <field name="name">envcare.hr.department.list</field>
+        <field name="model">envcare.hr.department</field>
+        <field name="arch" type="xml">
+            <list string="Departments">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="role_ids" widget="many2many_tags"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_envcare_hr_department_form" model="ir.ui.view">
+        <field name="name">envcare.hr.department.form</field>
+        <field name="model">envcare.hr.department</field>
+        <field name="arch" type="xml">
+            <form string="Department">
+                <sheet>
+                    <div class="oe_title"><h1><field name="name" placeholder="Department"/></h1></div>
+                    <notebook>
+                        <page string="Roles">
+                            <field name="role_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="group_id" options="{'no_create': True}"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Members">
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="user_id"/>
+                                    <field name="role_id"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_envcare_hr_department" model="ir.actions.act_window">
+        <field name="name">Departments &amp; Roles</field>
+        <field name="res_model">envcare.hr.department</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============ SIMPLE MASTER LISTS ============ -->
+    <record id="view_envcare_hr_expertise_list" model="ir.ui.view">
+        <field name="name">envcare.hr.expertise.list</field>
+        <field name="model">envcare.hr.expertise</field>
+        <field name="arch" type="xml">
+            <list editable="bottom"><field name="name"/></list>
+        </field>
+    </record>
+    <record id="action_envcare_hr_expertise" model="ir.actions.act_window">
+        <field name="name">Expertise</field>
+        <field name="res_model">envcare.hr.expertise</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <record id="view_envcare_hr_arpit_group_list" model="ir.ui.view">
+        <field name="name">envcare.hr.arpit.group.list</field>
+        <field name="model">envcare.hr.arpit.group</field>
+        <field name="arch" type="xml">
+            <list editable="bottom"><field name="name"/></list>
+        </field>
+    </record>
+    <record id="action_envcare_hr_arpit_group" model="ir.actions.act_window">
+        <field name="name">Arpit Groups</field>
+        <field name="res_model">envcare.hr.arpit.group</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <record id="view_envcare_hr_committed_hours_list" model="ir.ui.view">
+        <field name="name">envcare.hr.committed.hours.list</field>
+        <field name="model">envcare.hr.committed.hours</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_envcare_hr_committed_hours" model="ir.actions.act_window">
+        <field name="name">Committed Hours</field>
+        <field name="res_model">envcare.hr.committed.hours</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <!-- ============ MENUS ============ -->
+    <menuitem id="menu_envcare_hr" name="HR" parent="menu_envcare_root" sequence="30"
+              groups="environmental_care.group_envcare_hr_sevak,environmental_care.group_envcare_it"/>
+    <menuitem id="menu_envcare_hr_sevak" name="Sevak Master Records" parent="menu_envcare_hr"
+              action="action_envcare_sevak" sequence="10"/>
+
+    <menuitem id="menu_envcare_hr_config" name="Configuration" parent="menu_envcare_hr" sequence="90"/>
+    <menuitem id="menu_envcare_hr_department" name="Departments &amp; Roles" parent="menu_envcare_hr_config"
+              action="action_envcare_hr_department" sequence="10"/>
+    <menuitem id="menu_envcare_hr_expertise" name="Expertise" parent="menu_envcare_hr_config"
+              action="action_envcare_hr_expertise" sequence="20"/>
+    <menuitem id="menu_envcare_hr_arpit" name="Arpit Groups" parent="menu_envcare_hr_config"
+              action="action_envcare_hr_arpit_group" sequence="30"/>
+    <menuitem id="menu_envcare_hr_committed" name="Committed Hours" parent="menu_envcare_hr_config"
+              action="action_envcare_hr_committed_hours" sequence="40"/>
+</odoo>
