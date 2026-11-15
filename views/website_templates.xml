@@ -159,6 +159,236 @@
         </div>
     </template>
 
+    <!-- =====================================================================
+         REUSABLE CHATTER (log note / send message / schedule activity)
+         Usage:
+           <t t-call="environmental_care.chatter">
+               <t t-set="chatter_post_url" t-value="'/x/5/chatter/post'"/>
+               <t t-set="activity_schedule_url" t-value="'/x/5/activity/schedule'"/>
+               <t t-set="activity_done_url" t-value="'/x/activity/%s/done'"/>   %s = activity id
+           </t>
+         Data from the controller (see _chatter_values in controllers/main.py):
+           chatter_messages, chatter_activities, can_send_message,
+           activity_types, sevaks, default_remind_at, chatter_error
+    ====================================================================== -->
+    <template id="chatter" name="EC Chatter">
+        <section id="envcare_chatter" class="o_envcare_chatter mt-5">
+            <h4 class="mb-3"><i class="fa fa-comments-o me-2" aria-hidden="true"/>Activity &amp; Messages</h4>
+            <div t-if="chatter_error" class="alert alert-danger" role="alert"><t t-esc="chatter_error"/></div>
+
+            <!-- ===== Composer ===== -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <ul class="nav nav-pills card-header-pills" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#ecc_note"
+                                    role="tab" aria-controls="ecc_note" aria-selected="true">
+                                <i class="fa fa-sticky-note-o me-1" aria-hidden="true"/>Log note
+                            </button>
+                        </li>
+                        <li t-if="can_send_message" class="nav-item" role="presentation">
+                            <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#ecc_message"
+                                    role="tab" aria-controls="ecc_message" aria-selected="false">
+                                <i class="fa fa-envelope-o me-1" aria-hidden="true"/>Send message
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#ecc_activity"
+                                    role="tab" aria-controls="ecc_activity" aria-selected="false">
+                                <i class="fa fa-clock-o me-1" aria-hidden="true"/>Schedule activity
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body tab-content">
+                    <!-- Log note -->
+                    <div class="tab-pane fade show active" id="ecc_note" role="tabpanel">
+                        <form method="POST" t-att-action="chatter_post_url" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="hidden" name="mode" value="note"/>
+                            <div class="mb-2">
+                                <label for="ecc_recipients_note" class="form-label">Send to</label>
+                                <select id="ecc_recipients_note" name="recipient_ids" class="form-select" multiple="multiple" size="5">
+                                    <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"><t t-esc="sevak.name"/></option>
+                                </select>
+                                <div class="form-text">
+                                    Hold Ctrl (Cmd on Mac) to pick several people. An e-mail goes to the people you pick,
+                                    to you<t t-if="event_owner"> and to the event owner (<t t-esc="event_owner"/>)</t>.
+                                    Nobody needs to follow the event.
+                                </div>
+                            </div>
+                            <t t-call="environmental_care.html_input">
+                                <t t-set="name" t-value="'body'"/>
+                                <t t-set="value" t-value="''"/>
+                                <t t-set="input_id" t-value="'ecc_note_body'"/>
+                                <t t-set="required" t-value="False"/>
+                            </t>
+                            <input type="file" name="attachments" multiple="multiple"
+                                   class="form-control form-control-sm mt-2" aria-label="Attachments"/>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="form-text mt-0">Shown as an internal note on the event.</span>
+                                <button type="submit" class="btn btn-primary">Log</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Send message (e-mail) -->
+                    <div t-if="can_send_message" class="tab-pane fade" id="ecc_message" role="tabpanel">
+                        <form method="POST" t-att-action="chatter_post_url" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="hidden" name="mode" value="message"/>
+                            <div class="mb-2">
+                                <label for="ecc_recipients_message" class="form-label">Send to</label>
+                                <select id="ecc_recipients_message" name="recipient_ids" class="form-select" multiple="multiple" size="5">
+                                    <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"><t t-esc="sevak.name"/></option>
+                                </select>
+                                <div class="form-text">
+                                    Hold Ctrl (Cmd on Mac) to pick several people. An e-mail goes to the people you pick,
+                                    to you<t t-if="event_owner"> and to the event owner (<t t-esc="event_owner"/>)</t>.
+                                    Nobody needs to follow the event.
+                                </div>
+                            </div>
+                            <t t-call="environmental_care.html_input">
+                                <t t-set="name" t-value="'body'"/>
+                                <t t-set="value" t-value="''"/>
+                                <t t-set="input_id" t-value="'ecc_message_body'"/>
+                                <t t-set="required" t-value="False"/>
+                            </t>
+                            <input type="file" name="attachments" multiple="multiple"
+                                   class="form-control form-control-sm mt-2" aria-label="Attachments"/>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="form-text mt-0">Shown as a message on the event.</span>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-paper-plane me-1" aria-hidden="true"/>Send
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Schedule activity -->
+                    <div class="tab-pane fade" id="ecc_activity" role="tabpanel">
+                        <form method="POST" t-att-action="activity_schedule_url">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="ecc_type" class="form-label">Activity *</label>
+                                    <select id="ecc_type" name="activity_type" class="form-select" required="required">
+                                        <option t-foreach="activity_types" t-as="atype" t-att-value="atype[0]"
+                                                t-att-selected="atype_first"><t t-esc="atype[1]"/></option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ecc_remind_at" class="form-label">Date &amp; time (reminder) *</label>
+                                    <input id="ecc_remind_at" type="datetime-local" name="remind_at" class="form-control"
+                                           t-att-value="default_remind_at" required="required"/>
+                                </div>
+                                <div class="col-12">
+                                    <label for="ecc_summary" class="form-label">Summary</label>
+                                    <input id="ecc_summary" type="text" name="summary" class="form-control"
+                                           placeholder="e.g. Call the venue about chairs"/>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ecc_users" class="form-label">Assign to</label>
+                                    <select id="ecc_users" name="user_ids" class="form-select" multiple="multiple" size="6">
+                                        <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                                t-att-selected="sevak == request.env.user"><t t-esc="sevak.name"/></option>
+                                    </select>
+                                    <div class="form-text">Hold Ctrl (Cmd on Mac) to pick several people. Only they get a reminder, at the chosen time.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ecc_note_text" class="form-label">Note</label>
+                                    <textarea id="ecc_note_text" name="note" class="form-control" rows="6"/>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <span class="form-text mt-0">The selected people get an e-mail reminder at this time (nothing is sent before).</span>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-calendar-check-o me-1" aria-hidden="true"/>Schedule
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== Planned activities ===== -->
+            <div t-if="chatter_activities" class="mb-4">
+                <h6 class="text-uppercase text-muted small fw-bold">Planned activities</h6>
+                <ul class="list-group shadow-sm">
+                    <li t-foreach="chatter_activities" t-as="act" class="list-group-item">
+                        <div class="d-flex flex-wrap gap-3 align-items-start">
+                            <span t-attf-class="rounded-circle d-inline-flex align-items-center justify-content-center text-white flex-shrink-0 #{'bg-danger' if act['state'] == 'overdue' else 'bg-warning' if act['state'] == 'today' else 'bg-success'}"
+                                  style="width: 36px; height: 36px;" t-att-title="act['type']">
+                                <i t-attf-class="fa #{act['icon']}" aria-hidden="true"/>
+                            </span>
+                            <div class="flex-grow-1" style="min-width: 200px;">
+                                <div>
+                                    <strong t-esc="act['type']"/><t t-if="act['summary']">: <t t-esc="act['summary']"/></t>
+                                    <span t-attf-class="badge ms-1 #{'bg-danger' if act['state'] == 'overdue' else 'bg-warning' if act['state'] == 'today' else 'bg-success'}">
+                                        <t t-if="act['state'] == 'overdue'">Overdue</t>
+                                        <t t-elif="act['state'] == 'today'">Today</t>
+                                        <t t-else="">Planned</t>
+                                    </span>
+                                </div>
+                                <div class="small text-muted">
+                                    For <t t-esc="act['assignee']"/> · by <t t-esc="act['creator']"/>
+                                    <t t-if="act['remind_at']"> · <i class="fa fa-bell-o" aria-hidden="true"/> <t t-esc="act['remind_at']"/></t>
+                                </div>
+                                <div t-if="act['note']" class="small mt-1"><t t-out="act['note']"/></div>
+                            </div>
+                            <form t-if="act['can_done']" method="POST" t-att-action="activity_done_url % act['id']"
+                                  class="d-flex gap-1 align-items-center">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <input type="text" name="feedback" class="form-control form-control-sm"
+                                       placeholder="Feedback (optional)" aria-label="Feedback"/>
+                                <button type="submit" class="btn btn-sm btn-success text-nowrap">
+                                    <i class="fa fa-check me-1" aria-hidden="true"/>Done
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- ===== Messages (newest first) ===== -->
+            <div class="o_ecc_messages">
+                <div t-foreach="chatter_messages" t-as="msg" class="d-flex gap-3 mb-3">
+                    <img t-if="msg['avatar']" t-att-src="msg['avatar']" alt="" class="rounded-circle flex-shrink-0"
+                         style="width: 40px; height: 40px; object-fit: cover;"/>
+                    <span t-else="" class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center flex-shrink-0"
+                          style="width: 40px; height: 40px;"><i class="fa fa-cog" aria-hidden="true"/></span>
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <strong t-esc="msg['author']"/>
+                            <small class="text-muted" t-esc="msg['date']"/>
+                            <span t-if="msg['kind'] == 'note'" class="badge bg-secondary">Note</span>
+                            <span t-else="" class="badge bg-primary"><i class="fa fa-envelope-o me-1" aria-hidden="true"/>Message</span>
+                        </div>
+                        <div t-attf-class="mt-1 p-2 rounded #{'bg-light' if msg['kind'] == 'note' else 'border'}">
+                            <div class="o_ecc_body"><t t-out="msg['body']"/></div>
+                            <ul t-if="msg['tracking']" class="small mb-0 ps-3">
+                                <li t-foreach="msg['tracking']" t-as="change">
+                                    <t t-esc="change[0]"/>:
+                                    <span class="text-muted" t-esc="change[1]"/>
+                                    <i class="fa fa-long-arrow-right mx-1" aria-hidden="true"/>
+                                    <strong t-esc="change[2]"/>
+                                </li>
+                            </ul>
+                            <div t-if="msg['attachments']" class="d-flex flex-wrap gap-2 mt-2">
+                                <a t-foreach="msg['attachments']" t-as="att"
+                                   t-attf-href="/web/content/#{att[0]}?download=true"
+                                   class="badge bg-light text-dark border text-decoration-none">
+                                    <i class="fa fa-paperclip me-1" aria-hidden="true"/><t t-esc="att[1]"/>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p t-if="not chatter_messages" class="text-muted">No messages yet.</p>
+            </div>
+        </section>
+    </template>
+
     <!-- Event List -->
     <template id="event_list_template" name="Event List">
         <t t-call="website.layout">
@@ -323,6 +553,13 @@
                     </div>
                     <p><strong>Created By: </strong><span t-field="event.create_uid.name"/></p>
                 </div>
+
+                <!-- Chatter: log notes, messages, activities -->
+                <t t-call="environmental_care.chatter">
+                    <t t-set="chatter_post_url" t-value="'/event/%s/chatter/post' % event.id"/>
+                    <t t-set="activity_schedule_url" t-value="'/event/%s/activity/schedule' % event.id"/>
+                    <t t-set="activity_done_url" t-value="'/event/activity/%s/done'"/>
+                </t>
             </div>
 
             <!-- Edit: only for users who can edit this event -->
@@ -559,6 +796,96 @@
                         <a t-att-href="('/event/%s' % event.id) if event else '/events'" class="btn btn-secondary">Cancel</a>
                         <button type="submit" class="btn btn-success">
                             <t t-if="event">Save Changes</t><t t-else="">Create Event</t>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <!-- =====================================================================
+         MY PROFILE - /my (view only) and /my/account (edit)
+         Controller: EnvCarePortal in controllers/main.py
+    ====================================================================== -->
+    <template id="my_profile" name="EC My Profile">
+        <t t-call="website.layout">
+            <div class="container my-5" style="max-width: 760px;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1 class="mb-0">
+                        <t t-if="profile_edit">Edit Profile</t>
+                        <t t-else="">My Profile</t>
+                    </h1>
+                    <a t-if="not profile_edit" href="/my/account" class="btn btn-primary">
+                        <i class="fa fa-pencil me-1" aria-hidden="true"/>Edit
+                    </a>
+                </div>
+
+                <div t-if="error" class="alert alert-danger" role="alert"><t t-esc="error"/></div>
+                <div t-if="saved and not profile_edit" class="alert alert-success" role="status">Your profile has been saved.</div>
+
+                <!-- ===== View only (/my) ===== -->
+                <div t-if="not profile_edit" class="card shadow-sm p-4">
+                    <div class="d-flex flex-column flex-sm-row align-items-center gap-4">
+                        <img t-att-src="avatar_url" alt="Profile photo" class="rounded-circle border shadow-sm flex-shrink-0"
+                             style="width: 128px; height: 128px; object-fit: cover;"/>
+                        <div class="flex-grow-1 w-100">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">Name</dt>
+                                <dd class="col-sm-9"><t t-esc="values['name']"/></dd>
+                                <dt class="col-sm-3">Email</dt>
+                                <dd class="col-sm-9"><t t-esc="values['email']"/></dd>
+                                <dt class="col-sm-3">Phone</dt>
+                                <dd class="col-sm-9"><t t-esc="values['phone'] or '-'"/></dd>
+                                <dt class="col-sm-3">Address</dt>
+                                <dd class="col-sm-9 mb-0" style="white-space: pre-line;"><t t-esc="address or '-'"/></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== Edit (/my/account) ===== -->
+                <form t-if="profile_edit" method="POST" action="/my/account" enctype="multipart/form-data" class="card shadow-sm p-4">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="d-flex flex-column flex-sm-row align-items-center gap-4 mb-4">
+                        <img t-att-src="avatar_url" alt="Profile photo" class="rounded-circle border shadow-sm flex-shrink-0"
+                             style="width: 128px; height: 128px; object-fit: cover;"/>
+                        <div class="w-100">
+                            <label for="ecp_image" class="form-label">Profile photo</label>
+                            <input id="ecp_image" type="file" name="image" accept="image/*" class="form-control"/>
+                            <div class="form-text">Leave empty to keep your current photo.</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ecp_name" class="form-label">Name *</label>
+                        <input id="ecp_name" type="text" name="name" class="form-control" required="required"
+                               t-att-value="values['name']"/>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ecp_email" class="form-label">Email</label>
+                        <input id="ecp_email" type="email" class="form-control" readonly="readonly" disabled="disabled"
+                               t-att-value="values['email']"/>
+                        <div class="form-text">This is also the e-mail you log in with. Please contact HR to change it.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ecp_phone" class="form-label">Phone</label>
+                        <input id="ecp_phone" type="tel" name="phone" class="form-control"
+                               t-att-value="values['phone']"/>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ecp_address" class="form-label">Address</label>
+                        <textarea id="ecp_address" class="form-control" rows="3" readonly="readonly" disabled="disabled"><t t-esc="address"/></textarea>
+                        <div class="form-text">Your address is kept by HR. Please contact HR to change it.</div>
+                    </div>
+                    <div class="mb-4">
+                        <span class="form-label d-block">Password</span>
+                        <a href="/my/security" class="btn btn-outline-info">
+                            <i class="fa fa-key me-1" aria-hidden="true"/>Reset Password
+                        </a>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="/my" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa fa-check me-1" aria-hidden="true"/>Save
                         </button>
                     </div>
                 </form>

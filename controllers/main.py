@@ -1,18 +1,22 @@
 import base64
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 
 import pytz
 
 from odoo import Command, http
+from odoo.addons.portal.controllers.portal import CustomerPortal
 from odoo.addons.web.controllers.home import Home
 from odoo.addons.web.controllers.utils import ensure_db
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.http import request
-from odoo.tools import html2plaintext, html_sanitize
+from markupsafe import Markup
+
+from odoo.tools import format_datetime, html2plaintext, html_sanitize, is_html_empty
 
 # Where non-IT / non-admin users land instead of the backend:
 # their own profile page (every logged-in user can open it)
-WEBSITE_HOME = "/my/account"
+WEBSITE_HOME = "/my"
 
 # Only these groups may open the backend (/odoo, /web)
 BACKEND_GROUPS = (
@@ -277,10 +281,182 @@ class EnvEventWebsite(http.Controller):
     # ---------- 2. Detail ----------
     @http.route('/event/<model("envcare.event"):event>', type="http", auth="user", website=True)
     def event_detail(self, event, **kw):
-        return request.render("environmental_care.event_detail_template", {
+        values = {
             "event": event,
             "can_edit": event.can_edit,
-        })
+        }
+        values.update(self._chatter_values(event))
+        return request.render("environmental_care.event_detail_template", values)
+
+    # =====================================================================
+    # Chatter (messages, log notes, activities) on the event detail page
+    # =====================================================================
+    ACTIVITY_TYPES = [
+        ("mail.mail_activity_data_email", "Email"),
+        ("mail.mail_activity_data_call", "Call"),
+        ("mail.mail_activity_data_meeting", "Meeting"),
+        ("mail.mail_activity_data_todo", "To Do"),
+    ]
+
+    def _can_send_message(self, event):
+        """Send Message (e-mail): Events Head who created the event, IT, Admin.
+        (can_edit = IT, or Event Head + creator)"""
+        return event.can_edit or request.env.user.has_group("base.group_system")
+
+    def _format_dt(self, value):
+        return format_datetime(request.env, value, tz=request.env.user.tz, dt_format="medium") if value else ""
+
+    def _chatter_values(self, event):
+        user = request.env.user
+        # ---- messages (newest first) ----
+        messages = []
+        for msg in event.message_ids.filtered(lambda m: m.message_type in ("comment", "notification")):
+            tracking = []
+            for change in msg.sudo().tracking_value_ids._tracking_value_format():
+                tracking.append((
+                    change["changedField"],
+                    change["oldValue"]["value"] or "",
+                    change["newValue"]["value"] or "",
+                ))
+            if is_html_empty(msg.body) and not tracking and not msg.attachment_ids:
+                continue
+            is_note = msg.subtype_id.internal or msg.message_type == "notification"
+            messages.append({
+                "author": msg.author_id.name or msg.email_from or "System",
+                "avatar": f"/web/image/res.partner/{msg.author_id.id}/avatar_128" if msg.author_id else "",
+                "date": self._format_dt(msg.date),
+                "kind": "note" if is_note else "message",
+                "body": msg.body,
+                "tracking": tracking,
+                "attachments": [(a.id, a.name) for a in msg.attachment_ids],
+            })
+        # ---- planned activities ----
+        today = datetime.now(pytz.timezone(user.tz or "UTC")).date()
+        activities = []
+        for act in event.activity_ids.sorted(lambda a: (a.date_deadline, a.envcare_remind_at or datetime.min)):
+            state = "overdue" if act.date_deadline < today else "today" if act.date_deadline == today else "planned"
+            activities.append({
+                "id": act.id,
+                "type": act.activity_type_id.name,
+                "icon": act.activity_type_id.icon or "fa-tasks",
+                "summary": act.summary,
+                "note": act.note if not is_html_empty(act.note) else False,
+                "deadline": act.date_deadline,
+                "remind_at": self._format_dt(act.envcare_remind_at),
+                "assignee": act.user_id.name,
+                "creator": act.create_uid.name,
+                "state": state,
+                "can_done": user in (act.user_id | act.create_uid) or event.can_edit,
+            })
+        default_remind = datetime.now(pytz.timezone(user.tz or "UTC")) + timedelta(hours=1)
+        return {
+            "chatter_messages": messages,
+            "chatter_activities": activities,
+            "can_send_message": self._can_send_message(event),
+            "event_owner": event.sudo().create_uid.name,
+            "activity_types": self.ACTIVITY_TYPES,
+            "sevaks": self._sevak_options(),
+            "default_remind_at": default_remind.strftime("%Y-%m-%dT%H:%M"),
+            "chatter_error": request.params.get("chatter_error"),
+        }
+
+    def _back_to_chatter(self, event, error=None):
+        url = f"/event/{event.id}"
+        if error:
+            from werkzeug.urls import url_encode
+            url += "?" + url_encode({"chatter_error": error})
+        return request.redirect(url + "#envcare_chatter")
+
+    @http.route('/event/<model("envcare.event"):event>/chatter/post', type="http", auth="user",
+                website=True, methods=["POST"])
+    def event_chatter_post(self, event, **post):
+        """Log note (everyone who can see the event) or Send message
+        (Events Head creator / IT / Admin only). Both e-mail the event
+        creator, the sender and the people picked in "Send to"."""
+        mode = post.get("mode") or "note"
+        if mode == "message" and not self._can_send_message(event):
+            return self._back_to_chatter(event, "You are not allowed to send messages on this event.")
+        body = html_sanitize(post.get("body") or "")
+        files = [f for f in request.httprequest.files.getlist("attachments") if f and f.filename]
+        if is_html_empty(body) and not files:
+            return self._back_to_chatter(event, "Please write something before posting.")
+        # Who is e-mailed (Send message AND Log note):
+        #   1. the event creator, 2. the sender, 3. everyone picked in "Send to".
+        # Followers are NOT notified, and nobody has to follow the event.
+        picked = {int(u) for u in request.httprequest.form.getlist("recipient_ids") if u.isdigit()}
+        partners = self._sevak_options().filtered(lambda u: u.id in picked).partner_id
+        partners |= event.sudo().create_uid.partner_id
+        partners |= request.env.user.partner_id
+        partner_ids = partners.ids
+        try:
+            # mail_create_nosubscribe: posting does not make anyone a follower
+            event.with_context(
+                mail_create_nosubscribe=True,
+                envcare_notify_partner_ids=partner_ids,
+            ).message_post(
+                body=Markup(body),
+                message_type="comment",
+                subtype_xmlid="mail.mt_comment" if mode == "message" else "mail.mt_note",
+                partner_ids=partner_ids,
+                attachments=[(f.filename, f.read()) for f in files],
+                notify_author=True,   # the sender gets a copy too
+            )
+        except (AccessError, UserError, ValidationError) as e:
+            return self._back_to_chatter(event, str(e))
+        return self._back_to_chatter(event)
+
+    @http.route('/event/<model("envcare.event"):event>/activity/schedule', type="http", auth="user",
+                website=True, methods=["POST"])
+    def event_activity_schedule(self, event, **post):
+        """Schedule an Email / Call / Meeting / To Do for one or more EC users.
+        One activity per selected user. Nothing is sent now: only the
+        selected users get a reminder e-mail at the scheduled time."""
+        type_xmlid = post.get("activity_type")
+        if type_xmlid not in dict(self.ACTIVITY_TYPES):
+            return self._back_to_chatter(event, "Please choose an activity type.")
+        remind_at = self._from_input_datetime(post.get("remind_at"))
+        if not remind_at:
+            return self._back_to_chatter(event, "Please choose the date and time of the activity.")
+        allowed_ids = set(self._sevak_options().ids)
+        user_ids = [int(u) for u in request.httprequest.form.getlist("user_ids") if u.isdigit() and int(u) in allowed_ids]
+        if not user_ids:
+            user_ids = [request.env.user.id]
+        local_day = pytz.utc.localize(remind_at).astimezone(self._user_tz()).date()
+        group_key = uuid.uuid4().hex
+        try:
+            with request.env.cr.savepoint():
+                # mail_activity_quick_update: no "assigned to you" e-mail now -
+                # the selected users are only notified at the scheduled time
+                scheduler = event.with_context(mail_activity_quick_update=True)
+                for user_id in user_ids:
+                    scheduler.activity_schedule(
+                        type_xmlid,
+                        date_deadline=local_day,
+                        summary=(post.get("summary") or "").strip(),
+                        note=html_sanitize(post.get("note") or "") or "",
+                        user_id=user_id,
+                        envcare_remind_at=remind_at,
+                        envcare_group_key=group_key,
+                    )
+        except (AccessError, UserError, ValidationError) as e:
+            return self._back_to_chatter(event, str(e))
+        return self._back_to_chatter(event)
+
+    @http.route('/event/activity/<int:activity_id>/done', type="http", auth="user",
+                website=True, methods=["POST"])
+    def event_activity_done(self, activity_id, **post):
+        activity = request.env["mail.activity"].browse(activity_id).exists()
+        if not activity or activity.res_model != "envcare.event":
+            return request.redirect("/events")
+        event = request.env["envcare.event"].browse(activity.res_id)
+        user = request.env.user
+        if not (user in (activity.user_id | activity.create_uid) or event.can_edit):
+            return self._back_to_chatter(event, "Only the assigned user or the creator can mark this done.")
+        try:
+            activity.action_feedback(feedback=(post.get("feedback") or "").strip() or False)
+        except (AccessError, UserError, ValidationError) as e:
+            return self._back_to_chatter(event, str(e))
+        return self._back_to_chatter(event)
 
     # ---------- 3. Create ----------
     @http.route("/event/new", type="http", auth="user", website=True)
@@ -326,3 +502,71 @@ class EnvEventWebsite(http.Controller):
             request.env.invalidate_all()  # drop values that were rolled back
             return self._render_event_form(event, values=post, error=str(e))
         return request.redirect(f"/event/{event.id}")
+
+
+# ---------------------------------------------------------------------------
+# My Profile: /my (view only) and /my/account (edit)
+# Replaces Odoo's portal "My Account" pages.
+# ---------------------------------------------------------------------------
+class EnvCarePortal(CustomerPortal):
+
+    def _profile_values(self, editable, error=None, values=None):
+        user = request.env.user
+        user_sudo = user.sudo()
+        current = {
+            "name": user.name or "",
+            "email": user.login or user.email or "",
+            "phone": user_sudo.envcare_contact or "",
+        }
+        return {
+            # NOTE: not called "editable" - the website sets its own
+            # "editable" (page editor) and would overwrite it
+            "profile_edit": editable,
+            "profile_user": user,
+            # cache-busting so a new photo shows straight away
+            "avatar_url": f"/web/image/res.users/{user.id}/avatar_256?unique={int(user.write_date.timestamp()) if user.write_date else 0}",
+            "values": dict(current, **(values or {})),
+            # Address is kept by HR (Sevak Master Record): read only here
+            "address": user_sudo.envcare_address or "",
+            "error": error,
+            "saved": bool(request.params.get("saved")),
+        }
+
+    @http.route()
+    def home(self, **kw):
+        """/my - view only profile of the logged-in user."""
+        return request.render("environmental_care.my_profile", self._profile_values(editable=False))
+
+    @http.route()
+    def account(self, redirect=None, **post):
+        """/my/account - edit name, phone and photo (email and address are
+        shown read only; HR changes them). Cancel / Save."""
+        if request.httprequest.method != "POST":
+            return request.render("environmental_care.my_profile", self._profile_values(editable=True))
+
+        user = request.env.user
+        name = (post.get("name") or "").strip()
+        phone = (post.get("phone") or "").strip()
+        typed = {"name": name, "phone": phone}
+
+        if not name:
+            return request.render("environmental_care.my_profile",
+                                  self._profile_values(True, "Please enter your name.", typed))
+
+        # Email (= login) and Address are kept by HR: never taken from this form
+        partner_vals = {"name": name}
+        photo = request.httprequest.files.get("image")
+        if photo and photo.filename:
+            if not (photo.mimetype or "").startswith("image/"):
+                return request.render("environmental_care.my_profile",
+                                      self._profile_values(True, "The photo must be an image file.", typed))
+            partner_vals["image_1920"] = base64.b64encode(photo.read())
+
+        try:
+            with request.env.cr.savepoint():
+                # Only these fields, on the user's OWN record (sudo after the checks above)
+                user.partner_id.sudo().write(partner_vals)
+                user.sudo().write({"envcare_contact": phone})
+        except (UserError, ValidationError) as e:
+            return request.render("environmental_care.my_profile", self._profile_values(True, str(e), typed))
+        return request.redirect("/my?saved=1")
