@@ -1184,7 +1184,8 @@
         <field name="url">/workshops</field>
         <field name="parent_id" ref="website.main_menu"/>
         <field name="sequence" type="int">40</field>
-        <field name="group_ids" eval="[(6, 0, [ref('environmental_care.group_envcare_user')])]"/>
+        <!-- website.menu only accepts link / unlink (2-value) commands for groups -->
+        <field name="group_ids" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
     </record>
 
     <!-- =====================================================================

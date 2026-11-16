@@ -24,6 +24,7 @@
             'environmental_care/static/src/js/html_input.js',
             'environmental_care/static/src/js/row_editor.js',
             'environmental_care/static/src/scss/html_input.scss',
+            'environmental_care/static/src/scss/envcare_website.scss'
         ],
     },
     'installable': True,
