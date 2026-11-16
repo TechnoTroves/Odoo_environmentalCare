@@ -275,11 +275,35 @@ WORKSHOP_BUTTONS = {
 # Dropdown order: Draft and Canceled first, then the flow
 WORKSHOP_DROPDOWN_ORDER = ["draft", "canceled"] + WORKSHOP_STATE_FLOW[1:]
 
+# Who may move a workshop INTO each status (from the backend button labels).
+#   lead        -> the workshop's Lead
+#   hr          -> HR (Sevak / Head)
+#   events_head -> Event Head
+#   editor      -> anyone who can edit the workshop
+# IT and Admin may always do every move.
+WORKSHOP_STATE_ROLES = {
+    "workshop_lead_approved": "lead",               # Approve (Workshop Lead)
+    "hr_approved": "hr",                            # Approve (HR)
+    "additional_approved": "lead",                  # Additional Approved (Workshop Lead)
+    "events_head_additional_approved": "events_head",
+    "events_head_approved_design_details": "events_head",
+    "closure_details": "lead",                      # Closure (Workshop Lead)
+    "closed": "events_head",                        # Close Workshop (Events Head)
+    "canceled": "editor",                           # Cancel Workshop
+}
+WORKSHOP_ROLE_LABELS = {
+    "lead": "the Workshop Lead",
+    "hr": "HR",
+    "events_head": "the Events Head",
+    "editor": "someone who can edit the workshop",
+}
+
 
 class EnvWorkshops(models.Model):
     _name = "envcare.workshop"
     _description = "Environmental Care Workshop"
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    # envcare.chatter.mixin: website chatter (post access, e-mail recipients, links)
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.chatter.mixin']
 
     name = fields.Char(
         string="Workshop Name",
@@ -518,28 +542,105 @@ class EnvWorkshops(models.Model):
                 missing.append(field.string)
         return missing
 
-    def _get_website_state_options(self):
-        """Statuses the website dropdown may offer (authorization - can edit
-        the event - is checked before this by the website form):
-        the current status + every status whose backend button is visible
-        now, except moves whose required content is not filled yet."""
+    def _get_previous_state(self):
+        """The status before the current one (None for Draft / Canceled)."""
         self.ensure_one()
-        allowed = {self.state}
-        for target, (_method, visible_in) in WORKSHOP_BUTTONS.items():
-            if self.state in visible_in and not self._get_missing_fields_for(target):
-                allowed.add(target)
+        if self.state not in WORKSHOP_STATE_FLOW:
+            return None
+        index = WORKSHOP_STATE_FLOW.index(self.state)
+        return WORKSHOP_STATE_FLOW[index - 1] if index > 0 else None
+
+    def _envcare_has_role(self, role, user=None):
+        """Does `user` (default: current user) hold `role` for this workshop?"""
+        self.ensure_one()
+        user = user or self.env.user
+        if user.has_group("base.group_system") or user.has_group("environmental_care.group_envcare_it"):
+            return True
+        if role == "lead":
+            return user == self.sudo().workshop_lead_id
+        if role == "hr":
+            return user.has_group("environmental_care.group_envcare_hr_sevak")
+        if role == "events_head":
+            return user.has_group("environmental_care.group_event_head")
+        if role == "editor":
+            return self.with_user(user).has_access("write")
+        return False
+
+    def _envcare_can_move_to(self, target, user=None):
+        """Role + flow + content check for one move."""
+        self.ensure_one()
+        if target == self.state:
+            return True
+        previous_state, next_state = self._get_previous_state(), self._get_next_state()
+        if target == next_state:
+            return (self._envcare_has_role(WORKSHOP_STATE_ROLES.get(target), user)
+                    and not self._get_missing_fields_for(target))
+        if target == previous_state:
+            # step back = undo the current approval: same people who approve it
+            return self._envcare_has_role(WORKSHOP_STATE_ROLES.get(self.state), user)
+        if target == "canceled":
+            _method, visible_in = WORKSHOP_BUTTONS["canceled"]
+            return self.state in visible_in and self._envcare_has_role("editor", user)
+        return False
+
+    def _get_website_state_options(self, user=None):
+        """Status dropdown on the website: 1 before, the current one, 1 after
+        (+ Canceled where the backend allows it) - each only if this user may
+        make that move. Order: Draft and Canceled first, then the flow."""
+        self.ensure_one()
+        candidates = {self.state, self._get_previous_state(), self._get_next_state(), "canceled"} - {None}
+        allowed = {state for state in candidates if self._envcare_can_move_to(state, user)}
         return [state for state in WORKSHOP_DROPDOWN_ORDER if state in allowed]
 
+    def _envcare_status_info(self, user=None):
+        """For the website "i" button: dropdown options + why the next step is locked."""
+        self.ensure_one()
+        labels = dict(self._fields["state"]._description_selection(self.env))
+        options = self._get_website_state_options(user)
+        next_state = self._get_next_state()
+        missing, waiting_for = [], ""
+        if next_state and next_state not in options:
+            missing = self._get_missing_fields_for(next_state)
+            if not missing:
+                waiting_for = WORKSHOP_ROLE_LABELS.get(WORKSHOP_STATE_ROLES.get(next_state), "")
+        return {
+            "options": [(state, labels.get(state, state)) for state in options],
+            "missing": missing,
+            "waiting_for": waiting_for,
+            "next_label": labels.get(next_state, "") if next_state else "",
+        }
+
     def _apply_website_state(self, target):
-        """Move to `target` through its backend button method, so the same
-        checks run as when the button is clicked in the backend."""
+        """Move to `target` if the current user may. The move itself runs as
+        superuser AFTER the role check, because approvers (Lead, HR ...) are
+        not allowed to edit the workshop's other fields."""
         self.ensure_one()
         if target == self.state:
             return
-        method, visible_in = WORKSHOP_BUTTONS.get(target, (None, []))
-        if not method or self.state not in visible_in:
-            raise ValidationError(f"Workshop '{self.name}' cannot move to that status from its current status.")
-        getattr(self, method)()
+        if not self._envcare_can_move_to(target):
+            labels = dict(self._fields["state"]._description_selection(self.env))
+            missing = self._get_missing_fields_for(target)
+            raise ValidationError(
+                f"You cannot move workshop '{self.name}' to '{labels.get(target, target)}'."
+                + (f" Please fill: {', '.join(missing)}." if missing else "")
+            )
+        record = self.sudo()  # same user id -> chatter shows who did it
+        if target == self._get_previous_state():
+            record.state = target
+        else:
+            getattr(record, WORKSHOP_BUTTONS[target][0])()
+
+    # ---------------- website chatter hooks ----------------
+    def _envcare_website_url(self):
+        return f"/workshop/{self.id}"
+
+    def _envcare_chatter_owner(self):
+        # Workshop owners: the Events Head of the parent event, the Lead and the Deputy
+        record = self.sudo()
+        return record.event_id.create_uid | record.workshop_lead_id | record.workshop_deputy_id
+
+    def _envcare_can_manage_chatter(self):
+        return self.has_access("write") or self.env.user.has_group("base.group_system")
 
     def _check_ready_for(self, state):
         for record in self:

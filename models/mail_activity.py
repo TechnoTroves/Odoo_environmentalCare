@@ -46,8 +46,9 @@ class MailActivity(models.Model):
         mails = Mail
 
         for activity in activities:
-            if activity.res_model == "envcare.event":
-                link = f"{base_url}/event/{activity.res_id}"
+            record = self.env[activity.res_model].sudo().browse(activity.res_id)
+            if hasattr(record, "_envcare_website_url"):
+                link = base_url + record._envcare_website_url()   # e.g. /event/5, /workshop/7
             else:
                 link = f"{base_url}/odoo/{activity.res_model}/{activity.res_id}"
 

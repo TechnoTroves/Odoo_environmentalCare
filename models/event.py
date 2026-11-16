@@ -3,10 +3,8 @@ from odoo import api, fields, models
 class EnvEvents(models.Model):
     _name = "envcare.event"
     _description = "Environmental Care Event"
-    _inherit = ['mail.thread', 'mail.activity.mixin']
-    # Anyone who can READ an event may use its chatter (log notes, messages,
-    # activities). Who may *send* (email) a message is checked on the website.
-    _mail_post_access = 'read'
+    # envcare.chatter.mixin: website chatter (post access, e-mail recipients, links)
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.chatter.mixin']
 
     name = fields.Char(
         string="Event Name",
@@ -82,32 +80,16 @@ class EnvEvents(models.Model):
             is_new = not record._origin.id
             record.can_edit = is_it or (is_head and (is_new or record.create_uid == user))
 
-    def _notify_get_recipients(self, message, msg_vals, **kwargs):
-        """Website chatter: when the context lists the partners to notify
-        (event creator + sender + chosen receivers), notify ONLY them -
-        not the followers - and always by e-mail (most users have no
-        backend inbox)."""
-        recipients = super()._notify_get_recipients(message, msg_vals, **kwargs)
-        listed = self.env.context.get("envcare_notify_partner_ids")
-        if listed is None:
-            return recipients
-        listed = set(listed)
-        return [dict(r, notif="email") for r in recipients if r["id"] in listed]
+    # ---------------- website chatter hooks ----------------
+    def _envcare_website_url(self):
+        return f"/event/{self.id}"
 
-    def _get_access_action(self, access_uid=None, force_website=False):
-        """Links in e-mails ("View Event", activity e-mails ...) open the
-        website page for everyone except IT / Admin, who have the backend."""
-        self.ensure_one()
-        user = self.env["res.users"].sudo().browse(access_uid) if access_uid else self.env.user
-        if not (user.has_group("base.group_system") or user.has_group("environmental_care.group_envcare_it")):
-            return {
-                "type": "ir.actions.act_url",
-                "url": f"/event/{self.id}",
-                "target": "self",
-                "target_type": "public",
-                "res_id": self.id,
-            }
-        return super()._get_access_action(access_uid=access_uid, force_website=force_website)
+    def _envcare_chatter_owner(self):
+        return self.sudo().create_uid
+
+    def _envcare_can_manage_chatter(self):
+        # Events Head who created the event, IT (can_edit) or Admin
+        return self.can_edit or self.env.user.has_group("base.group_system")
 
     def action_set_live(self):
         for record in self:

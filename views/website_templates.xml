@@ -162,14 +162,13 @@
     <!-- =====================================================================
          REUSABLE CHATTER (log note / send message / schedule activity)
          Usage:
-           <t t-call="environmental_care.chatter">
-               <t t-set="chatter_post_url" t-value="'/x/5/chatter/post'"/>
-               <t t-set="activity_schedule_url" t-value="'/x/5/activity/schedule'"/>
-               <t t-set="activity_done_url" t-value="'/x/activity/%s/done'"/>   %s = activity id
-           </t>
-         Data from the controller (see _chatter_values in controllers/main.py):
-           chatter_messages, chatter_activities, can_send_message,
-           activity_types, sevaks, default_remind_at, chatter_error
+           1. the model inherits envcare.chatter.mixin (models/chatter_mixin.py)
+              and is listed in CHATTER_MODELS (controllers/common.py)
+           2. the page controller adds  self._chatter_values(record)  to the values
+           3. the template does         <t t-call="environmental_care.chatter"/>
+         _chatter_values gives: chatter_messages, chatter_activities, can_send_message,
+           event_owner, activity_types, sevaks, default_remind_at, chatter_error,
+           chatter_post_url, activity_schedule_url, activity_done_url
     ====================================================================== -->
     <template id="chatter" name="EC Chatter">
         <section id="envcare_chatter" class="o_envcare_chatter mt-5">
@@ -213,7 +212,7 @@
                                 </select>
                                 <div class="form-text">
                                     Hold Ctrl (Cmd on Mac) to pick several people. An e-mail goes to the people you pick,
-                                    to you<t t-if="event_owner"> and to the event owner (<t t-esc="event_owner"/>)</t>.
+                                    to you<t t-if="event_owner"> and to the owners (<t t-esc="event_owner"/>)</t>.
                                     Nobody needs to follow the event.
                                 </div>
                             </div>
@@ -244,7 +243,7 @@
                                 </select>
                                 <div class="form-text">
                                     Hold Ctrl (Cmd on Mac) to pick several people. An e-mail goes to the people you pick,
-                                    to you<t t-if="event_owner"> and to the event owner (<t t-esc="event_owner"/>)</t>.
+                                    to you<t t-if="event_owner"> and to the owners (<t t-esc="event_owner"/>)</t>.
                                     Nobody needs to follow the event.
                                 </div>
                             </div>
@@ -532,7 +531,7 @@
                                 <t t-foreach="event.workshop_ids" t-as="workshop">
                                     <tr>
                                         <td>
-                                            <span t-field="workshop.name"/>
+                                            <a t-att-href="'/workshop/%s' % workshop.id" t-field="workshop.name"/>
                                             <div class="text-muted small" t-if="workshop.description" t-field="workshop.description"/>
                                         </td>
                                         <td><span t-field="workshop.workshop_lead_id.name"/></td>
@@ -555,11 +554,8 @@
                 </div>
 
                 <!-- Chatter: log notes, messages, activities -->
-                <t t-call="environmental_care.chatter">
-                    <t t-set="chatter_post_url" t-value="'/event/%s/chatter/post' % event.id"/>
-                    <t t-set="activity_schedule_url" t-value="'/event/%s/activity/schedule' % event.id"/>
-                    <t t-set="activity_done_url" t-value="'/event/activity/%s/done'"/>
-                </t>
+                <!-- URLs and data come from _chatter_values() in controllers/common.py -->
+                <t t-call="environmental_care.chatter"/>
             </div>
 
             <!-- Edit: only for users who can edit this event -->
@@ -713,6 +709,10 @@
                                                                 <li t-foreach="st['missing']" t-as="field_label"><t t-esc="field_label"/></li>
                                                             </ul>
                                                         </t>
+                                                        <t t-elif="st.get('waiting_for')">
+                                                            <i class="fa fa-hourglass-half text-info me-1"/>
+                                                            Next step <strong t-esc="st['next_label']"/> is done by <t t-esc="st['waiting_for']"/>.
+                                                        </t>
                                                         <t t-elif="st.get('next_label')">
                                                             <i class="fa fa-check text-success me-1"/>
                                                             Next step: <strong t-esc="st['next_label']"/>
@@ -802,6 +802,390 @@
             </div>
         </t>
     </template>
+
+    <!-- =====================================================================
+         WORKSHOPS - list, detail (+ chatter), Add / Edit form
+         Controller: controllers/workshop.py
+    ====================================================================== -->
+    <template id="workshop_list_template" name="Workshop List">
+        <t t-call="website.layout">
+            <div class="container my-5 pb-5">
+                <h1 class="mb-4">Workshops</h1>
+
+                <t t-call="environmental_care.table_search">
+                    <t t-set="table_id" t-value="'envcare_workshop_table'"/>
+                    <t t-set="columns" t-value="search_columns"/>
+                </t>
+
+                <div class="table-responsive">
+                    <table id="envcare_workshop_table" class="table table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Workshop Name</th>
+                                <th>Event</th>
+                                <th>Lead</th>
+                                <th>Deputy</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="workshops" t-as="ws">
+                                <tr>
+                                    <td data-ets-col="name"><span t-field="ws.name"/></td>
+                                    <td data-ets-col="event" t-att-data-ets-value="ws.event_id.id"><span t-field="ws.event_id.name"/></td>
+                                    <td data-ets-col="lead"><span t-field="ws.workshop_lead_id.name"/></td>
+                                    <td data-ets-col="deputy"><span t-field="ws.workshop_deputy_id.name"/></td>
+                                    <td data-ets-col="date_start"><span t-field="ws.date_start"/></td>
+                                    <td data-ets-col="date_end"><span t-field="ws.date_end"/></td>
+                                    <td data-ets-col="state" t-att-data-ets-value="ws.state">
+                                        <span t-field="ws.state" t-attf-class="badge #{'bg-secondary' if ws.state == 'draft' else 'bg-danger' if ws.state == 'canceled' else 'bg-success' if ws.state == 'closed' else 'bg-info'}"/>
+                                    </td>
+                                    <td>
+                                        <a t-att-href="'/workshop/%s' % ws.id" class="btn btn-sm btn-primary">View Details</a>
+                                    </td>
+                                </tr>
+                            </t>
+                            <tr t-if="not workshops">
+                                <td colspan="8" class="text-center text-muted">No workshops yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add: only for users who can create workshops -->
+            <t t-call="environmental_care.fab_buttons">
+                <t t-set="buttons" t-value="[{'href': '/workshop/new', 'icon': 'fa-plus', 'title': 'Add Workshop'}] if can_create else []"/>
+            </t>
+        </t>
+    </template>
+
+    <template id="workshop_detail_template" name="Workshop Detail">
+        <t t-call="website.layout">
+            <t t-set="ws" t-value="workshop"/>
+            <div class="container my-5 pb-5">
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <a href="/workshops" class="btn btn-secondary" title="Back to list" aria-label="Back to list">
+                            <i class="fa fa-long-arrow-left fa-lg" aria-hidden="true"/>
+                        </a>
+                    </div>
+                    <div class="col-md-8">
+                        <h1 t-field="ws.name"/>
+                    </div>
+                </div>
+                <div class="card p-4 shadow-sm">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>Status: </strong>
+                                <span t-field="ws.state" t-attf-class="badge #{'bg-secondary' if ws.state == 'draft' else 'bg-danger' if ws.state == 'canceled' else 'bg-success' if ws.state == 'closed' else 'bg-info'}"/>
+                            </p>
+                            <p class="mb-2"><strong>Event: </strong>
+                                <a t-att-href="'/event/%s' % ws.event_id.id" t-field="ws.event_id.name"/>
+                            </p>
+                            <p class="mb-2"><strong>Event Head: </strong><span t-field="ws.event_creator_id.name"/></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>Workshop Lead: </strong><span t-field="ws.workshop_lead_id.name"/></p>
+                            <p class="mb-2"><strong>Workshop Deputy: </strong><span t-field="ws.workshop_deputy_id.name"/></p>
+                            <p class="mb-2"><strong>Timing: </strong>
+                                <span t-field="ws.date_start"/>
+                                <i class="fa fa-long-arrow-right mx-2 text-muted" aria-hidden="true"/>
+                                <span t-field="ws.date_end"/>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Sevaks:</strong>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            <span t-foreach="ws.sevak_ids" t-as="sevak" class="badge bg-light text-dark border" t-esc="sevak.name"/>
+                            <span t-if="not ws.sevak_ids" class="text-muted">-</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Description:</strong>
+                        <div class="o_envcare_html_view" t-field="ws.description"/>
+                    </div>
+                    <div class="mt-2">
+                        <h5>Workshop Item List</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 64px;"><span class="visually-hidden">Image</span></th>
+                                        <th>Item</th>
+                                        <th class="text-end">Qty</th>
+                                        <th>Remarks</th>
+                                        <th>Availability</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="ws.items_ids" t-as="item">
+                                        <td><img t-att-src="'/web/image/product.product/%s/image_128' % item.product_id.id"
+                                                 t-att-alt="item.product_id.display_name" class="rounded border"
+                                                 style="width: 48px; height: 48px; object-fit: cover;"/></td>
+                                        <td t-esc="item.product_id.display_name"/>
+                                        <td class="text-end" t-esc="item.qty"/>
+                                        <td><div class="small" t-field="item.remarks"/></td>
+                                        <td><span t-attf-class="badge #{'bg-success' if item.is_available else 'bg-danger'}" t-esc="item.availability"/></td>
+                                    </tr>
+                                    <tr t-if="not ws.items_ids">
+                                        <td colspan="5" class="text-center text-muted">No items yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <t t-call="environmental_care.chatter"/>
+            </div>
+
+            <!-- Edit: users who can edit the workshop or change its status -->
+            <t t-call="environmental_care.fab_buttons">
+                <t t-set="buttons" t-value="[{'href': '/workshop/edit/%s' % ws.id, 'icon': 'fa-pencil', 'title': 'Edit Workshop'}] if can_edit else []"/>
+            </t>
+        </t>
+    </template>
+
+    <!-- Workshop Form (Add and Edit) - first part: details + Workshop Item List -->
+    <template id="workshop_form_template" name="Workshop Form">
+        <t t-call="website.layout">
+            <t t-set="ro" t-value="None if can_edit_fields else 'disabled'"/>
+            <div class="container my-5" style="max-width: 960px;">
+                <h1 class="mb-4">
+                    <t t-if="workshop">Edit Workshop <span t-field="workshop.name"/></t>
+                    <t t-else="">Add Workshop</t>
+                </h1>
+                <div t-if="error" class="alert alert-danger" role="alert"><t t-esc="error"/></div>
+                <div t-if="not can_edit_fields" class="alert alert-info" role="status">
+                    <i class="fa fa-info-circle me-1" aria-hidden="true"/>You can only change the status of this workshop.
+                </div>
+                <form t-att-action="form_action" method="POST" class="card p-4 shadow-sm">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="wsf_name" class="form-label">Workshop Name *</label>
+                            <input id="wsf_name" type="text" name="name" class="form-control" required="required"
+                                   t-att-value="values.get('name')" t-att-disabled="ro"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="wsf_event" class="form-label">Event *</label>
+                            <select id="wsf_event" name="event_id" class="form-select" required="required" t-att-disabled="ro">
+                                <option value="">Select...</option>
+                                <option t-foreach="events" t-as="ev" t-att-value="ev.id"
+                                        t-att-selected="str(ev.id) == str(values.get('event_id') or '')"><t t-esc="ev.name"/></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="wsf_description" class="form-label">Description</label>
+                        <t t-if="can_edit_fields" t-call="environmental_care.html_input">
+                            <t t-set="input_id" t-value="'wsf_description'"/>
+                            <t t-set="name" t-value="'description'"/>
+                            <t t-set="value" t-value="values.get('description')"/>
+                            <t t-set="required" t-value="False"/>
+                        </t>
+                        <div t-else="" id="wsf_description" class="form-control bg-light"><t t-out="values.get('description') or ''"/></div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="wsf_lead" class="form-label">Workshop Lead *</label>
+                            <select id="wsf_lead" name="lead" class="form-select" required="required" t-att-disabled="ro">
+                                <option value="">Select...</option>
+                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                        t-att-selected="str(sevak.id) == str(values.get('lead') or '')"><t t-esc="sevak.name"/></option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="wsf_deputy" class="form-label">Workshop Deputy *</label>
+                            <select id="wsf_deputy" name="deputy" class="form-select" required="required" t-att-disabled="ro">
+                                <option value="">Select...</option>
+                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                        t-att-selected="str(sevak.id) == str(values.get('deputy') or '')"><t t-esc="sevak.name"/></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="wsf_start" class="form-label">Start</label>
+                            <input id="wsf_start" type="datetime-local" name="date_start" class="form-control"
+                                   t-att-value="values.get('date_start')" t-att-disabled="ro"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="wsf_end" class="form-label">End</label>
+                            <input id="wsf_end" type="datetime-local" name="date_end" class="form-control"
+                                   t-att-value="values.get('date_end')" t-att-disabled="ro"/>
+                        </div>
+                        <div class="col-12 form-text mt-1">Leave Start / End empty to use the event's dates.</div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="wsf_sevaks" class="form-label">Sevaks</label>
+                            <select id="wsf_sevaks" name="sevak_ids" class="form-select" multiple="multiple" size="6" t-att-disabled="ro">
+                                <option t-foreach="sevaks" t-as="sevak" t-att-value="sevak.id"
+                                        t-att-selected="str(sevak.id) in (values.get('sevak_ids') or [])"><t t-esc="sevak.name"/></option>
+                            </select>
+                            <div class="form-text">Hold Ctrl (Cmd on Mac) to pick several. The Lead and Deputy are always added.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="wsf_state" class="form-label">Status</label>
+                            <t t-set="st" t-value="status"/>
+                            <div class="input-group flex-nowrap">
+                                <select id="wsf_state" name="state" class="form-select">
+                                    <option t-foreach="st.get('options', [])" t-as="opt" t-att-value="opt[0]"
+                                            t-att-selected="opt[0] == (values.get('state') or 'draft')"><t t-esc="opt[1]"/></option>
+                                </select>
+                                <!-- "i" button: what the next status needs -->
+                                <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                        t-attf-class="btn rounded-end #{'btn-warning' if st.get('missing') else 'btn-secondary'}"
+                                        title="Status info" aria-label="Status info">
+                                    <i class="fa fa-info"/>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end p-3 small" style="min-width: 260px; max-width: 320px;">
+                                    <t t-if="st.get('missing')">
+                                        <div class="fw-bold mb-1 badge bg-warning">
+                                            <i class="fa fa-exclamation-triangle me-1"/>Not ready for <t t-esc="st['next_label']"/>
+                                        </div>
+                                        <div class="mb-1">Please fill:</div>
+                                        <ul class="mb-0 ps-3">
+                                            <li t-foreach="st['missing']" t-as="field_label"><t t-esc="field_label"/></li>
+                                        </ul>
+                                    </t>
+                                    <t t-elif="st.get('waiting_for')">
+                                        <i class="fa fa-hourglass-half text-info me-1"/>
+                                        Next step <strong t-esc="st['next_label']"/> is done by <t t-esc="st['waiting_for']"/>.
+                                    </t>
+                                    <t t-elif="st.get('next_label')">
+                                        <i class="fa fa-check text-success me-1"/>
+                                        Next step: <strong t-esc="st['next_label']"/>
+                                    </t>
+                                    <t t-else="">No further steps for this workshop.</t>
+                                </div>
+                            </div>
+                            <div class="form-text">Shows the status before, the current one and the next - only the moves you are allowed to make.</div>
+                        </div>
+                    </div>
+
+                    <!-- ===== Workshop Item List ===== -->
+                    <div class="mb-4 o_envcare_rows">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="form-label mb-0">Workshop Item List</span>
+                            <button t-if="can_edit_fields" type="button" class="btn btn-sm btn-outline-primary o_er_add">
+                                <i class="fa fa-plus me-1"/>Add Item
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-1">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 56px;"><span class="visually-hidden">Image</span></th>
+                                        <th style="min-width: 220px;">Item *</th>
+                                        <th style="min-width: 90px;">Qty *</th>
+                                        <th style="min-width: 200px;">Remarks</th>
+                                        <th>Availability</th>
+                                        <th class="text-center"><span class="visually-hidden">Remove</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Existing items -->
+                                    <t t-if="workshop">
+                                        <tr t-foreach="workshop.items_ids" t-as="item">
+                                            <td><img t-att-src="'/web/image/product.product/%s/image_128' % item.product_id.id" alt=""
+                                                     class="rounded border" style="width: 40px; height: 40px; object-fit: cover;"/></td>
+                                            <td>
+                                                <t t-if="can_edit_fields"><select class="form-select form-select-sm" t-attf-name="item_#{item.id}_product" required="required" aria-label="Product">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="products" t-as="product" t-att-value="product.id"
+                                                        t-att-selected="product == item.product_id"><t t-esc="product.display_name"/></option>
+                                            </select></t>
+                                                <span t-else="" t-esc="item.product_id.display_name"/>
+                                            </td>
+                                            <td><input type="number" min="1" step="1" class="form-control form-control-sm" required="required"
+                                                       t-attf-name="item_#{item.id}_qty" t-att-value="item.qty" aria-label="Quantity" t-att-disabled="ro"/></td>
+                                            <td><textarea class="form-control form-control-sm" rows="1" t-attf-name="item_#{item.id}_remarks"
+                                                          aria-label="Remarks" t-att-disabled="ro"><t t-esc="remarks_text(item.remarks)"/></textarea></td>
+                                            <td><span t-attf-class="badge #{'bg-success' if item.is_available else 'bg-danger'}" t-esc="item.availability"/></td>
+                                            <td class="text-center">
+                                                <div t-if="can_delete_items and can_edit_fields" class="form-check d-inline-block mb-0" title="Delete this item">
+                                                    <input class="form-check-input" type="checkbox" t-attf-name="item_#{item.id}_delete"
+                                                           value="1" aria-label="Delete item"/>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <!-- New items typed before a save error -->
+                                    <tr t-foreach="new_items" t-as="ni">
+                                        <td/>
+                                        <td><select class="form-select form-select-sm" name="item_new_product" required="required" aria-label="Product">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="products" t-as="product" t-att-value="product.id"
+                                                        t-att-selected="str(product.id) == ni['product']"><t t-esc="product.display_name"/></option>
+                                            </select></td>
+                                        <td><input type="number" min="1" step="1" class="form-control form-control-sm" name="item_new_qty"
+                                                   required="required" t-att-value="ni['qty'] or 1" aria-label="Quantity"/></td>
+                                        <td><textarea class="form-control form-control-sm" rows="1" name="item_new_remarks"
+                                                      aria-label="Remarks"><t t-esc="ni['remarks']"/></textarea></td>
+                                        <td><span class="badge bg-light text-dark border">New</span></td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-link text-danger o_er_remove" title="Remove row">
+                                                <i class="fa fa-times"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- Blank row copied by "Add Item" (disabled = not submitted) -->
+                                    <tr t-if="can_edit_fields" class="o_er_template d-none">
+                                        <td/>
+                                        <td><select class="form-select form-select-sm" name="item_new_product" required="required" aria-label="Product" disabled="disabled">
+                                                <option value="">Select...</option>
+                                                <option t-foreach="products" t-as="product" t-att-value="product.id"
+                                                        t-att-selected="False"><t t-esc="product.display_name"/></option>
+                                            </select></td>
+                                        <td><input type="number" min="1" step="1" class="form-control form-control-sm" name="item_new_qty"
+                                                   required="required" value="1" disabled="disabled" aria-label="Quantity"/></td>
+                                        <td><textarea class="form-control form-control-sm" rows="1" name="item_new_remarks"
+                                                      disabled="disabled" aria-label="Remarks"/></td>
+                                        <td><span class="badge bg-light text-dark border">New</span></td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-link text-danger o_er_remove" title="Remove row">
+                                                <i class="fa fa-times"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="not (workshop and workshop.items_ids) and not can_edit_fields">
+                                        <td colspan="6" class="text-center text-muted">No items yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div t-if="can_edit_fields" class="form-text">
+                            Availability is worked out from the stock on hand after saving.
+                            <t t-if="can_delete_items">Tick the box at the end of a row to delete that item.</t>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a t-att-href="('/workshop/%s' % workshop.id) if workshop else '/workshops'" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <t t-if="workshop">Save Changes</t><t t-else="">Create Workshop</t>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <!-- Website menu "Workshops": only for signed-in Environmental Care users -->
+    <record id="menu_envcare_workshops" model="website.menu">
+        <field name="name">Workshops</field>
+        <field name="url">/workshops</field>
+        <field name="parent_id" ref="website.main_menu"/>
+        <field name="sequence" type="int">40</field>
+        <field name="group_ids" eval="[(6, 0, [ref('environmental_care.group_envcare_user')])]"/>
+    </record>
 
     <!-- =====================================================================
          MY PROFILE - /my (view only) and /my/account (edit)
