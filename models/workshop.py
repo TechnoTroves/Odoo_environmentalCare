@@ -1,11 +1,36 @@
 from odoo import Command, api, fields, models
-from odoo.exceptions import ValidationError
-from odoo.tools import is_html_empty
+from odoo.exceptions import AccessError, UserError, ValidationError
+
+class EnvWorkshopLineMixin(models.AbstractModel):
+    """Lines of a workshop (items, budget, accounts, document URLs): nobody but
+    IT / Admin may change them while their workshop is canceled. Who may edit
+    them at all is a record rule (same people as the workshop)."""
+    _name = "envcare.workshop.line.mixin"
+    _description = "Environmental Care Workshop Line (canceled lock)"
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        workshop_ids = {vals.get("workshop_id") for vals in vals_list} - {None, False}
+        self.env["envcare.workshop"].browse(list(workshop_ids))._envcare_check_not_canceled()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if all(key.startswith(EnvWorkshops._ENVCARE_FREE_FIELD_PREFIXES) for key in vals):
+            return super().write(vals)  # chatter / activity bookkeeping only
+        self.workshop_id._envcare_check_not_canceled()
+        if vals.get("workshop_id"):
+            self.env["envcare.workshop"].browse(vals["workshop_id"])._envcare_check_not_canceled()
+        return super().write(vals)
+
+    def unlink(self):
+        self.workshop_id._envcare_check_not_canceled()
+        return super().unlink()
+
 
 class EnvWorkshopItems(models.Model):
     _name = "envcare.workshop.items"
     _description = "Environmental Care Workshop Items"
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.workshop.line.mixin']
 
     workshop_id = fields.Many2one(
         "envcare.workshop",
@@ -65,11 +90,11 @@ class EnvWorkshopItems(models.Model):
 
             if on_hand >= requested:
                 difference = int(on_hand - requested)
-                record.availability = f"✅ Available({difference})"
+                record.availability = f"✅ Available"
                 record.is_available = True
             else:
                 difference = int(requested - on_hand)
-                record.availability = f"❌ Not Available({difference})"
+                record.availability = f"❌ Not Available"
                 record.is_available = False
 
 
@@ -77,7 +102,7 @@ class EnvWorkshopItems(models.Model):
 class EnvWorkshopBudgets(models.Model):
     _name = "envcare.workshop.budgets"
     _description = "Environmental Care Workshop Budgets"
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.workshop.line.mixin']
 
     workshop_id = fields.Many2one(
         "envcare.workshop",
@@ -123,7 +148,7 @@ class EnvWorkshopBudgets(models.Model):
 class EnvWorkshopAccounts(models.Model):
     _name = "envcare.workshop.accounts"
     _description = "Environmental Care Workshop Accounts"
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.workshop.line.mixin']
 
     workshop_id = fields.Many2one(
         "envcare.workshop",
@@ -206,7 +231,7 @@ class EnvWorkshopBudgetsCategories(models.Model):
 class EnvWorkshopDocs(models.Model):
     _name = "envcare.workshop.docs"
     _description = "Environmental Care Workshop Documents"
-    _inherit = ['mail.thread','mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'envcare.workshop.line.mixin']
     
     docs_urls = fields.Char(
         string="Docs URLs"
@@ -219,84 +244,6 @@ class EnvWorkshopDocs(models.Model):
         readonly=True,
         ondelete="cascade"
     )
-
-
-# ---------------------------------------------------------------------------
-# Workshop status flow
-# ---------------------------------------------------------------------------
-# Order the workshop moves through (canceled is outside the flow)
-WORKSHOP_STATE_FLOW = [
-    "draft",
-    "workshop_lead_approved",
-    "hr_approved",
-    "additional_approved",
-    "events_head_additional_approved",
-    "events_head_approved_design_details",
-    "closure_details",
-    "closed",
-]
-
-# Content that must be filled BEFORE a workshop can move INTO a status.
-# Add more statuses here as their rules are decided.
-WORKSHOP_STATE_REQUIRED_FIELDS = {
-    # Ready to be sent to HR for approval
-    "workshop_lead_approved": [
-        "name",
-        "description",
-        "event_id",
-        "workshop_lead_id",
-        "workshop_deputy_id",
-        "date_start",
-        "date_end",
-        "sevak_ids",
-        "items_ids",
-    ],
-}
-
-# The backend header buttons (views/workshop_views.xml), as data:
-#   target status -> (button method, statuses in which that button is visible)
-# The website status dropdown offers exactly what these buttons allow, and
-# applies a choice by calling the same button method - one set of rules.
-WORKSHOP_BUTTONS = {
-    "workshop_lead_approved": ("action_approve_lead", ["draft"]),
-    "hr_approved": ("action_approve_hr", ["workshop_lead_approved"]),
-    "additional_approved": ("action_approve_additional_lead", ["hr_approved"]),
-    "events_head_additional_approved": ("action_approve_additional_head", ["additional_approved"]),
-    "events_head_approved_design_details": ("action_approve_design_head", ["events_head_additional_approved"]),
-    "closure_details": ("action_closure", ["events_head_approved_design_details"]),
-    "closed": ("action_close", ["closure_details"]),
-    # "Cancel Workshop" is hidden once the workshop is LIVE / closing / closed
-    "canceled": ("action_cancel", [
-        "draft", "workshop_lead_approved", "hr_approved",
-        "additional_approved", "events_head_additional_approved",
-    ]),
-}
-
-# Dropdown order: Draft and Canceled first, then the flow
-WORKSHOP_DROPDOWN_ORDER = ["draft", "canceled"] + WORKSHOP_STATE_FLOW[1:]
-
-# Who may move a workshop INTO each status (from the backend button labels).
-#   lead        -> the workshop's Lead
-#   hr          -> HR (Sevak / Head)
-#   events_head -> Event Head
-#   editor      -> anyone who can edit the workshop
-# IT and Admin may always do every move.
-WORKSHOP_STATE_ROLES = {
-    "workshop_lead_approved": "lead",               # Approve (Workshop Lead)
-    "hr_approved": "hr",                            # Approve (HR)
-    "additional_approved": "lead",                  # Additional Approved (Workshop Lead)
-    "events_head_additional_approved": "events_head",
-    "events_head_approved_design_details": "events_head",
-    "closure_details": "lead",                      # Closure (Workshop Lead)
-    "closed": "events_head",                        # Close Workshop (Events Head)
-    "canceled": "editor",                           # Cancel Workshop
-}
-WORKSHOP_ROLE_LABELS = {
-    "lead": "the Workshop Lead",
-    "hr": "HR",
-    "events_head": "the Events Head",
-    "editor": "someone who can edit the workshop",
-}
 
 
 class EnvWorkshops(models.Model):
@@ -344,22 +291,21 @@ class EnvWorkshops(models.Model):
         string="End Date & Time"
     )
 
-    state = fields.Selection(
-        [
-            ("canceled","Canceled"),
-            ("draft","Draft"),
-            ("workshop_lead_approved","Workshop Lead Approved"),
-            ("hr_approved","HR Approved"),
-            ("additional_approved","Workshop Lead Approved Additional"),
-            ("events_head_additional_approved","Events Head Approved Additional"),
-            ("events_head_approved_design_details","LIVE Events Head Approved Design Details"),
-            ("closure_details","Closure Details Approved"),
-            ("closed","Closed")
-        ],
-        string="Status",
-        default="draft",
-        required=True,
+    # Replaces the old Status. Only the parent event's Events Head and IT / Admin
+    # can switch it; a canceled workshop is read-only for everyone except IT / Admin.
+    is_canceled = fields.Boolean(
+        string="Canceled",
+        default=False,
         tracking=True
+    )
+
+    # For the logged-in user (views + website): see _envcare_can_edit / _envcare_can_cancel
+    can_edit = fields.Boolean(
+        compute="_compute_envcare_access",
+    )
+
+    can_cancel = fields.Boolean(
+        compute="_compute_envcare_access",
     )
 
     workshop_lead_id = fields.Many2one(
@@ -467,6 +413,7 @@ class EnvWorkshops(models.Model):
         return super().create([self._add_lead_deputy_to_sevaks(vals) for vals in vals_list])
 
     def write(self, vals):
+        self._envcare_check_write(vals)
         return super().write(self._add_lead_deputy_to_sevaks(vals))
 
     @api.constrains('workshop_lead_id', 'workshop_deputy_id')
@@ -521,114 +468,102 @@ class EnvWorkshops(models.Model):
                             f"must fall within the parent Event timing ({event.date_begin} to {event.date_end})."
                         )
 
-    # ---------------- status flow helpers ----------------
-    def _get_next_state(self):
-        """The status that comes after the current one (None at the end / canceled)."""
-        self.ensure_one()
-        if self.state not in WORKSHOP_STATE_FLOW:
-            return None
-        index = WORKSHOP_STATE_FLOW.index(self.state)
-        return WORKSHOP_STATE_FLOW[index + 1] if index + 1 < len(WORKSHOP_STATE_FLOW) else None
+    # ---------------- access: who may edit / cancel ----------------
+    # Edit:   IT / Admin always; the parent event's Events Head, the Workshop
+    #         Lead and the Workshop Deputy while the workshop is not canceled.
+    # Cancel: IT / Admin and the parent event's Events Head.
+    # The same rules are record rules in security/envcare_security.xml (edit)
+    # and checked again in write() (cancel + canceled lock) - the website and
+    # the backend only hide what the server would refuse anyway.
+    # Later: per-field edit / approval rights per role are added on top of this.
 
-    def _get_missing_fields_for(self, state):
-        """Labels of the fields still empty before moving into `state`."""
-        self.ensure_one()
-        missing = []
-        for fname in WORKSHOP_STATE_REQUIRED_FIELDS.get(state, []):
-            field = self._fields[fname]
-            value = self[fname]
-            empty = is_html_empty(value) if field.type == "html" else not value
-            if empty:
-                missing.append(field.string)
-        return missing
+    # Mail / activity bookkeeping is not "editing the workshop"
+    _ENVCARE_FREE_FIELD_PREFIXES = ("message_", "activity_", "website_message", "rating_")
 
-    def _get_previous_state(self):
-        """The status before the current one (None for Draft / Canceled)."""
-        self.ensure_one()
-        if self.state not in WORKSHOP_STATE_FLOW:
-            return None
-        index = WORKSHOP_STATE_FLOW.index(self.state)
-        return WORKSHOP_STATE_FLOW[index - 1] if index > 0 else None
+    def _envcare_is_it_or_admin(self, user=None):
+        user = user or self.env.user
+        return user.has_group("environmental_care.group_envcare_it") or user.has_group("base.group_system")
 
-    def _envcare_has_role(self, role, user=None):
-        """Does `user` (default: current user) hold `role` for this workshop?"""
+    def _envcare_is_team(self, user=None):
+        """Events Head of the parent event, Workshop Lead or Workshop Deputy."""
         self.ensure_one()
         user = user or self.env.user
-        if user.has_group("base.group_system") or user.has_group("environmental_care.group_envcare_it"):
+        record = self.sudo()
+        return user in (record.event_id.create_uid | record.workshop_lead_id | record.workshop_deputy_id)
+
+    def _envcare_can_cancel(self, user=None):
+        self.ensure_one()
+        user = user or self.env.user
+        if self._envcare_is_it_or_admin(user):
             return True
-        if role == "lead":
-            return user == self.sudo().workshop_lead_id
-        if role == "hr":
-            return user.has_group("environmental_care.group_envcare_hr_sevak")
-        if role == "events_head":
-            return user.has_group("environmental_care.group_event_head")
-        if role == "editor":
-            return self.with_user(user).has_access("write")
-        return False
+        return (user.has_group("environmental_care.group_event_head")
+                and self.sudo().event_id.create_uid == user)
 
-    def _envcare_can_move_to(self, target, user=None):
-        """Role + flow + content check for one move."""
+    def _envcare_can_edit(self, user=None):
         self.ensure_one()
-        if target == self.state:
+        user = user or self.env.user
+        if self._envcare_is_it_or_admin(user):
             return True
-        previous_state, next_state = self._get_previous_state(), self._get_next_state()
-        if target == next_state:
-            return (self._envcare_has_role(WORKSHOP_STATE_ROLES.get(target), user)
-                    and not self._get_missing_fields_for(target))
-        if target == previous_state:
-            # step back = undo the current approval: same people who approve it
-            return self._envcare_has_role(WORKSHOP_STATE_ROLES.get(self.state), user)
-        if target == "canceled":
-            _method, visible_in = WORKSHOP_BUTTONS["canceled"]
-            return self.state in visible_in and self._envcare_has_role("editor", user)
-        return False
+        return not self.is_canceled and self._envcare_is_team(user)
 
-    def _get_website_state_options(self, user=None):
-        """Status dropdown on the website: 1 before, the current one, 1 after
-        (+ Canceled where the backend allows it) - each only if this user may
-        make that move. Order: Draft and Canceled first, then the flow."""
-        self.ensure_one()
-        candidates = {self.state, self._get_previous_state(), self._get_next_state(), "canceled"} - {None}
-        allowed = {state for state in candidates if self._envcare_can_move_to(state, user)}
-        return [state for state in WORKSHOP_DROPDOWN_ORDER if state in allowed]
+    @api.depends_context("uid")
+    def _compute_envcare_access(self):
+        user = self.env.user
+        is_it = self._envcare_is_it_or_admin(user)
+        is_head = user.has_group("environmental_care.group_event_head")
+        for record in self:
+            saved = record._origin  # saved values: the form doesn't lock itself while typing
+            if is_it:
+                record.can_edit = record.can_cancel = True
+            elif not saved.id:
+                # New workshop: Events Heads (for their own events, checked on save)
+                record.can_edit, record.can_cancel = is_head, False
+            else:
+                record.can_edit = saved._envcare_can_edit(user)
+                record.can_cancel = saved._envcare_can_cancel(user)
 
-    def _envcare_status_info(self, user=None):
-        """For the website "i" button: dropdown options + why the next step is locked."""
-        self.ensure_one()
-        labels = dict(self._fields["state"]._description_selection(self.env))
-        options = self._get_website_state_options(user)
-        next_state = self._get_next_state()
-        missing, waiting_for = [], ""
-        if next_state and next_state not in options:
-            missing = self._get_missing_fields_for(next_state)
-            if not missing:
-                waiting_for = WORKSHOP_ROLE_LABELS.get(WORKSHOP_STATE_ROLES.get(next_state), "")
-        return {
-            "options": [(state, labels.get(state, state)) for state in options],
-            "missing": missing,
-            "waiting_for": waiting_for,
-            "next_label": labels.get(next_state, "") if next_state else "",
-        }
-
-    def _apply_website_state(self, target):
-        """Move to `target` if the current user may. The move itself runs as
-        superuser AFTER the role check, because approvers (Lead, HR ...) are
-        not allowed to edit the workshop's other fields."""
-        self.ensure_one()
-        if target == self.state:
+    def _envcare_check_write(self, vals):
+        """Server-side guard for write(): Canceled switch + canceled lock."""
+        if self.env.su or self._envcare_is_it_or_admin():
             return
-        if not self._envcare_can_move_to(target):
-            labels = dict(self._fields["state"]._description_selection(self.env))
-            missing = self._get_missing_fields_for(target)
-            raise ValidationError(
-                f"You cannot move workshop '{self.name}' to '{labels.get(target, target)}'."
-                + (f" Please fill: {', '.join(missing)}." if missing else "")
-            )
-        record = self.sudo()  # same user id -> chatter shows who did it
-        if target == self._get_previous_state():
-            record.state = target
-        else:
-            getattr(record, WORKSHOP_BUTTONS[target][0])()
+        content = [key for key in vals if key != "is_canceled"
+                   and not key.startswith(self._ENVCARE_FREE_FIELD_PREFIXES)]
+        for record in self:
+            if "is_canceled" in vals and bool(vals["is_canceled"]) != record.is_canceled \
+                    and not record._envcare_can_cancel():
+                raise AccessError(
+                    f"Only the Events Head of '{record.event_id.name}' or IT can cancel / un-cancel "
+                    f"workshop '{record.name}'."
+                )
+            still_canceled = record.is_canceled and vals.get("is_canceled", True)
+            if content and still_canceled:
+                raise UserError(f"Workshop '{record.name}' is canceled, so it cannot be changed.")
+
+    def _envcare_check_not_canceled(self):
+        """Used by the workshop's lines (items, budget, accounts, documents)."""
+        if self.env.su or self._envcare_is_it_or_admin():
+            return
+        for record in self.sudo():
+            if record.is_canceled:
+                raise UserError(f"Workshop '{record.name}' is canceled, so it cannot be changed.")
+
+    @api.model
+    def _envcare_migrate_canceled_state(self):
+        """Upgrade step (called from security/envcare_security.xml): the old
+        Status column is left in the database by Odoo - carry 'Canceled' over
+        to the new Canceled switch. Does nothing once the column is gone."""
+        self.env.cr.execute("""
+            SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'envcare_workshop' AND column_name = 'state'
+        """)
+        if self.env.cr.fetchone():
+            self.env.cr.execute("""
+                UPDATE envcare_workshop SET is_canceled = TRUE
+                 WHERE state = 'canceled' AND is_canceled IS NOT TRUE
+            """)
+            # Odoo drops the old column after the upgrade; until then it must not block new rows
+            self.env.cr.execute("ALTER TABLE envcare_workshop ALTER COLUMN state DROP NOT NULL")
+            self.invalidate_model(["is_canceled"])
 
     # ---------------- website chatter hooks ----------------
     def _envcare_website_url(self):
@@ -641,49 +576,6 @@ class EnvWorkshops(models.Model):
 
     def _envcare_can_manage_chatter(self):
         return self.has_access("write") or self.env.user.has_group("base.group_system")
-
-    def _check_ready_for(self, state):
-        for record in self:
-            missing = record._get_missing_fields_for(state)
-            if missing:
-                label = dict(record._fields["state"]._description_selection(record.env)).get(state, state)
-                raise ValidationError(
-                    f"Workshop '{record.name}' cannot move to '{label}' yet. "
-                    f"Please fill: {', '.join(missing)}."
-                )
-
-    def action_approve_lead(self):
-        self._check_ready_for("workshop_lead_approved")
-        for record in self:
-            record.state = "workshop_lead_approved"
-
-    def action_approve_hr(self):
-        for record in self:
-            record.state = "hr_approved"
-    
-    def action_approve_additional_lead(self):
-        for record in self:
-            record.state = "additional_approved"
-            
-    def action_approve_additional_head(self):
-        for record in self:
-            record.state = "events_head_additional_approved"
-
-    def action_approve_design_head(self):
-        for record in self:
-            record.state = "events_head_approved_design_details"
-
-    def action_closure(self):
-        for record in self:
-            record.state = "closure_details"
-
-    def action_close(self):
-        for record in self:
-            record.state = "closed"
-
-    def action_cancel(self):
-        for record in self:
-            record.state = "canceled"
 
     def action_open_workshop(self):
         self.ensure_one()

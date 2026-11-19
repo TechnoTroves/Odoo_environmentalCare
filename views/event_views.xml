@@ -63,7 +63,7 @@
                                     <field name="workshop_deputy_id" options="{'no_create':True}"/>
                                     <field name="date_start" readonly="1"/>
                                     <field name="date_end" readonly="1"/>
-                                    <field name="state"/>
+                                    <field name="is_canceled" widget="boolean_toggle" readonly="1"/>
                                     <button type="object" name="action_open_workshop" icon="fa-external-link" title="Open Workshop" aria-label="Open Workshop"/>
                                 </list>
                             </field>

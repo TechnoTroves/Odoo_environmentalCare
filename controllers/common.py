@@ -1,8 +1,12 @@
 """Helpers shared by all Environmental Care website controllers."""
+import base64
+import re
 from datetime import datetime, timedelta
 
 import pytz
 
+from odoo import Command
+from odoo.exceptions import ValidationError
 from odoo.http import request
 from odoo.tools import format_datetime, is_html_empty
 
@@ -19,6 +23,184 @@ ACTIVITY_TYPES = [
 
 class EnvCareWebsiteMixin:
     """Plain mixin (not a controller): dates, sevak lists and chatter data."""
+
+    # ---------- attachments (template: environmental_care.attachment_input) ----------
+    def _attachment_commands(self, record, name, field):
+        """Many2many ir.attachment field `field` of `record` from the form:
+        files uploaded in <input type="file" name="{name}"> are added, ticked
+        "{name}_remove" checkboxes are removed. Returns the commands (or [])."""
+        form = request.httprequest.form
+        current = set(record[field].ids)
+        remove_ids = {int(x) for x in form.getlist(f"{name}_remove") if x.isdigit()} & current
+        commands = [Command.unlink(att_id) for att_id in remove_ids]
+        for upload in request.httprequest.files.getlist(name):
+            if not (upload and upload.filename):
+                continue
+            attachment = request.env["ir.attachment"].create({
+                "name": upload.filename,
+                "datas": base64.b64encode(upload.read()),
+                "res_model": record._name,
+                "res_id": record.id,
+            })
+            commands.append(Command.link(attachment.id))
+        return commands
+
+    def _save_attachments(self, record, fields):
+        """Several attachment fields at once; input name = field name."""
+        vals = {}
+        for field in fields:
+            commands = self._attachment_commands(record, field, field)
+            if commands:
+                vals[field] = commands
+        if vals:
+            record.write(vals)
+
+    # ---------- line tables (template: environmental_care.line_table, flag allow_edit) ----------
+    # A line table edits a One2many on the website. Column spec (dicts):
+    #   name     field name on the line model
+    #   label    column title
+    #   type     char | url | text | int | float | m2o | m2m | bool | files
+    #   options  key into the `options` dict (m2o / m2m): list of (id_str, label)
+    #   required True -> every row needs it
+    #   width    min width in px (optional)
+    # Input names: existing row  {key}_{id}_{field}
+    #              new row       {key}_new{n}_{field}  (n given by row_editor.js)
+    #              row marker    {prefix}row  (only posted when the row is editable)
+    def _line_rows(self, lines, columns):
+        """Existing lines -> row dicts for the template."""
+        rows = []
+        for line in lines:
+            row = {"id": line.id}
+            for col in columns:
+                name, ctype = col["name"], col["type"]
+                value = line[name]
+                if ctype == "m2o":
+                    row[name] = str(value.id or "")
+                    row[f"{name}_label"] = value.display_name or ""
+                elif ctype == "m2m":
+                    row[name] = [str(i) for i in value.ids]
+                    row[f"{name}_labels"] = value.mapped("display_name")
+                elif ctype in ("char", "url", "text"):
+                    row[name] = value or ""
+                else:  # int, float, bool, files
+                    row[name] = value
+            rows.append(row)
+        return rows
+
+    def _new_line_indexes(self, key):
+        pattern = re.compile(rf"^{re.escape(key)}_new(\d+)_row$")
+        found = [int(m.group(1)) for m in map(pattern.match, request.httprequest.form.keys()) if m]
+        return sorted(set(found))
+
+    def _posted_new_line_rows(self, key, columns):
+        """New rows as typed (to show them again after an error)."""
+        form = request.httprequest.form
+        rows = []
+        for index in self._new_line_indexes(key):
+            prefix = f"{key}_new{index}_"
+            row = {"index": index}
+            for col in columns:
+                name = col["name"]
+                if col["type"] == "m2m":
+                    row[name] = form.getlist(prefix + name)
+                elif col["type"] == "bool":
+                    row[name] = bool(form.get(prefix + name))
+                elif col["type"] != "files":
+                    row[name] = form.get(prefix + name) or ""
+            rows.append(row)
+        return rows
+
+    def _line_vals(self, prefix, columns, allowed, table_label):
+        """One posted row -> (vals, has_content). `allowed`: option key -> set of ids."""
+        form = request.httprequest.form
+        vals, has_content = {}, False
+        for col in columns:
+            name, ctype, label = col["name"], col["type"], col["label"]
+            raw = form.get(prefix + name)
+            if ctype == "files":
+                has_content |= any(f and f.filename for f in request.httprequest.files.getlist(prefix + name))
+                continue
+            if ctype in ("char", "url", "text"):
+                value = (raw or "").strip()
+            elif ctype == "int":
+                try:
+                    value = int(raw) if (raw or "").strip() else 0
+                except ValueError:
+                    raise ValidationError(f"{table_label}: {label} must be a whole number.")
+            elif ctype == "float":
+                try:
+                    value = float(raw) if (raw or "").strip() else 0.0
+                except ValueError:
+                    raise ValidationError(f"{table_label}: {label} must be a number.")
+            elif ctype == "m2o":
+                ok = allowed.get(col.get("options"), set())
+                value = int(raw) if (raw or "").isdigit() and int(raw) in ok else False
+            elif ctype == "m2m":
+                ok = allowed.get(col.get("options"), set())
+                value = [int(x) for x in form.getlist(prefix + name) if x.isdigit() and int(x) in ok]
+            elif ctype == "bool":
+                value = bool(raw)
+            else:
+                continue
+            has_content |= bool(value)
+            vals[name] = value
+        return vals, has_content
+
+    def _save_line_table(self, parent, key, field, columns, allowed, table_label, can_delete):
+        """Create / update / delete the lines of parent[field] from the form.
+        Rows not posted (read-only) are left alone. Files are added after the
+        line exists (attachments need the line's id)."""
+        form = request.httprequest.form
+        Line = parent[field].browse()
+        inverse = parent._fields[field].inverse_name
+        file_cols = [col["name"] for col in columns if col["type"] == "files"]
+
+        def _check_required(vals):
+            for col in columns:
+                if col.get("required") and not vals.get(col["name"]):
+                    raise ValidationError(f"{table_label}: every row needs {col['label']}.")
+
+        def _to_write(vals):
+            return {k: (Command.set(v) if isinstance(v, list) else v) for k, v in vals.items()}
+
+        for line in parent[field]:
+            prefix = f"{key}_{line.id}_"
+            if f"{prefix}row" not in form:
+                continue
+            if can_delete and form.get(f"{prefix}delete"):
+                line.unlink()
+                continue
+            vals, _content = self._line_vals(prefix, columns, allowed, table_label)
+            _check_required(vals)
+            changed = {}
+            for name, value in vals.items():
+                current = line[name]
+                if line._fields[name].type == "many2one":
+                    current = current.id or False
+                elif line._fields[name].type == "many2many":
+                    current, value = sorted(current.ids), sorted(value)
+                elif line._fields[name].type in ("char", "text", "html"):
+                    current = current or ""
+                if current != value:
+                    changed[name] = vals[name]
+            if changed:
+                line.write(_to_write(changed))
+            for name in file_cols:
+                commands = self._attachment_commands(line, prefix + name, name)
+                if commands:
+                    line.write({name: commands})
+
+        for index in self._new_line_indexes(key):
+            prefix = f"{key}_new{index}_"
+            vals, has_content = self._line_vals(prefix, columns, allowed, table_label)
+            if not has_content:
+                continue  # empty row
+            _check_required(vals)
+            line = Line.create(dict(_to_write(vals), **{inverse: parent.id}))
+            for name in file_cols:
+                commands = self._attachment_commands(line, prefix + name, name)
+                if commands:
+                    line.write({name: commands})
 
     # ---------- dates ----------
     def _user_tz(self):

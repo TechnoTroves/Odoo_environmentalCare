@@ -1,7 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_envcare_event_user,envcare.event.user,model_envcare_event,group_envcare_user,1,0,0,0
 access_envcare_event_head,envcare.event.head,model_envcare_event,group_event_head,1,1,1,0
-access_envcare_workshop_user,envcare.workshop.user,model_envcare_workshop,group_envcare_user,1,0,0,0
+access_envcare_workshop_user,envcare.workshop.user,model_envcare_workshop,group_envcare_user,1,1,0,0
 access_envcare_workshop_head,envcare.workshop.head,model_envcare_workshop,group_event_head,1,1,1,0
 access_envcare_workshop_accounts_user,envcare.workshop.accounts.user,model_envcare_workshop_accounts,group_envcare_user,1,1,1,0
 access_envcare_workshop_budgets_user,envcare.workshop.budgets.user,model_envcare_workshop_budgets,group_envcare_user,1,1,1,0

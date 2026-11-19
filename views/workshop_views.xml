@@ -11,7 +11,7 @@
                 <field name="workshop_lead_id"/>
                 <field name="date_start"/>
                 <field name="date_end"/>
-                <field name="state" widget="badge"/>
+                <field name="is_canceled" widget="boolean_toggle" readonly="1" optional="show"/>
             </list>
         </field>
     </record>
@@ -22,52 +22,44 @@
         <field name="model">envcare.workshop</field>
         <field name="arch" type="xml">
             <form string="Workshop">
-                <header>
-                    <button name="action_approve_lead" string="Approve (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'draft'"/>
-                    <button name="action_approve_hr" string="Approve (HR)" type="object" class="oe_highlight" invisible="state != 'workshop_lead_approved'"/>
-                    <button name="action_approve_additional_lead" string="Additional Approved (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'hr_approved'"/>
-                    <button name="action_approve_additional_head" string="Additional Approved (Events Head)" type="object" class="oe_highlight" invisible="state != 'additional_approved'"/>
-                    <button name="action_approve_design_head" string="LIVE Design Details Approved (Events Head)" type="object" class="oe_highlight" invisible="state != 'events_head_additional_approved'"/>
-                    <button name="action_closure" string="Closure (Workshop Lead)" type="object" class="oe_highlight" invisible="state != 'events_head_approved_design_details'"/>
-                    <button name="action_close" string="Close Workshop(Events Head)" type="object" invisible="state != 'closure_details'"/>
-                    <button name="action_cancel" string="Cancel Workshop" type="object" invisible="state in ('events_head_approved_design_details', 'closure_details', 'closed', 'canceled')"/>
-                    
-                    <field name="state" widget="statusbar" statusbar_visible="draft,workshop_lead_approved,hr_approved,additional_approved,events_head_additional_approved,events_head_approved_design_details,closure_details,closed" invisible="state == 'canceled'"/>
-                </header>
+                <!-- No status: the whole workshop is always visible. Editable by IT / Admin,
+                     the parent event's Events Head, the Workshop Lead and Deputy (not when canceled). -->
+                <field name="can_edit" invisible="1"/>
+                <field name="can_cancel" invisible="1"/>
                 <sheet>
-                    <widget name="web_ribbon" title="Canceled" bg_color="bg-danger" invisible="state != 'canceled'"/>
+                    <widget name="web_ribbon" title="Canceled" bg_color="bg-danger" invisible="not is_canceled"/>
                     <div class="oe_title">
                         <h1>
-                            <field name="name" readonly="state == 'canceled'"/>
+                            <field name="name" readonly="not can_edit"/>
                         </h1>
-                        <field name="description" readonly="state == 'canceled'"/>
+                        <field name="description" readonly="not can_edit"/>
                     </div>
                     <group string="Workshop Details">
                         <group>
                             <group>
-                                <field name="event_id" readonly="state == 'canceled'"/>
-                                <field name="workshop_lead_id" options="{'no_create':True}" readonly="state == 'canceled'"/>
-                                <field name="workshop_deputy_id" options="{'no_create':True}" readonly="state == 'canceled'"/>
+                                <field name="event_id" readonly="not can_edit"/>
+                                <field name="workshop_lead_id" options="{'no_create':True}" readonly="not can_edit"/>
+                                <field name="workshop_deputy_id" options="{'no_create':True}" readonly="not can_edit"/>
                             </group>
                             <group>
                                 <label for="date_start" string="Workshop Timing"/>
                                 <div class="o_row">
-                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date_end'}" readonly="state == 'canceled'"/>
+                                    <field name="date_start" widget="daterange" options="{'related_end_date': 'date_end'}" readonly="not can_edit"/>
                                     <i class="fa fa-long-arrow-right mx-2 text-muted" title="To" aria-label="To"/>
-                                    <field name="date_end" readonly="state == 'canceled'"/>
+                                    <field name="date_end" readonly="not can_edit"/>
                                 </div>
-                                <field name="event_creator_id" readonly="state == 'canceled'"/>
+                                <field name="event_creator_id" readonly="not can_edit"/>
                             </group>
                         </group>
                         <group>
                             <group>
-                                <field name="sevak_ids" widget="many2many_tags" options="{'no_create': True, 'no_create_edit': True}" readonly="state == 'canceled'"/>
-                                <field name="state"/>
+                                <field name="sevak_ids" widget="many2many_tags" options="{'no_create': True, 'no_create_edit': True}" readonly="not can_edit"/>
+                                <field name="is_canceled" widget="boolean_toggle" readonly="not can_cancel"/>
                             </group>
                         </group>
                         <notebook>
                             <page string="Workshop Item List">
-                                <field name="items_ids" readonly="state == 'canceled'">
+                                <field name="items_ids" readonly="not can_edit">
                                     <list editable="bottom">
                                         <field name="product_id" options="{'no_create':True}"/>
                                         <field name="qty"/>
@@ -79,11 +71,11 @@
                             </page>
                         </notebook>
                     </group>
-                    <group string="Additional Details" invisible="state in ('draft','workshop_lead_approved')">
-                        <field name="pitch_deck" widget="many2many_binary" string="" readonly="state == 'canceled'"/>
+                    <group string="Additional Details">
+                        <field name="pitch_deck" widget="many2many_binary" string="" readonly="not can_edit"/>
                         <notebook>
                             <page string="Budget">
-                                <field name="budgets_ids" readonly="state == 'canceled'">
+                                <field name="budgets_ids" readonly="not can_edit">
                                     <list editable="bottom">
                                         <field name="workshop_id" readonly="1"/>
                                         <field name="name"/>
@@ -97,17 +89,17 @@
                             </page>
                         </notebook>
                     </group>
-                    <group string="Live" invisible="state in ('draft','workshop_lead_approved','hr_approved','additional_approved','events_head_additional_approved')">
-                        <field name="process" readonly="state == 'canceled'"/>
-                        <field name="design_requirements" readonly="state == 'canceled'"/>
-                        <field name="design_collaterals" widget="many2many_binary" readonly="state == 'canceled'"/>
-                        <field name="statistics_product_impact" readonly="state == 'canceled'"/>
-                        <field name="talkie" readonly="state == 'canceled'"/>
+                    <group string="Live">
+                        <field name="process" readonly="not can_edit"/>
+                        <field name="design_requirements" readonly="not can_edit"/>
+                        <field name="design_collaterals" widget="many2many_binary" readonly="not can_edit"/>
+                        <field name="statistics_product_impact" readonly="not can_edit"/>
+                        <field name="talkie" readonly="not can_edit"/>
                     </group>
-                    <group string="Closure" invisible="state in ('draft','workshop_lead_approved','hr_approved','additional_approved','events_head_additional_approved','events_head_approved_design_details')">
+                    <group string="Closure">
                         <notebook>
                             <page string="Accounts">
-                                <field name="accounts_ids" readonly="state == 'canceled'">
+                                <field name="accounts_ids" readonly="not can_edit">
                                     <list editable="bottom">
                                         <field name="workshop_id" readonly="1"/>
                                         <field name="name"/>
@@ -123,12 +115,12 @@
                                 </field>
                             </page>
                         </notebook>
-                        <field name="statistics_workshop" readonly="state == 'canceled'"/>
-                        <field name="av_footage" widget="many2many_binary" readonly="state == 'canceled'"/>
-                        <field name="docs_files" widget="many2many_binary" readonly="state == 'canceled'"/>
+                        <field name="statistics_workshop" readonly="not can_edit"/>
+                        <field name="av_footage" widget="many2many_binary" readonly="not can_edit"/>
+                        <field name="docs_files" widget="many2many_binary" readonly="not can_edit"/>
                         <notebook>
                             <page string="Documents">
-                                <field name="doc_id" readonly="state == 'canceled'">
+                                <field name="doc_id" readonly="not can_edit">
                                     <list editable="bottom">
                                         <field name="docs_urls" widget="url" placeholder="https://docs.google.com/document/d/"/>
                                     </list>

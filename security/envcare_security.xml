@@ -98,6 +98,174 @@
         <field name="perm_unlink" eval="True"/>
     </record>
 
+    <!-- RECORD RULES: WORKSHOPS -->
+    <!-- Every EC user reads every workshop. Edit: the parent event's Events Head,
+         the Workshop Lead and the Workshop Deputy (+ IT). Only Events Heads create,
+         and only under their own events. "Canceled" lock + who may cancel:
+         models/workshop.py (_envcare_check_write). Per-field rights come later. -->
+    <record id="rule_envcare_workshop_read_all" model="ir.rule">
+        <field name="name">EC Workshop: users read all</field>
+        <field name="model_id" ref="model_envcare_workshop"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_team" model="ir.rule">
+        <field name="name">EC Workshop: Events Head of the event, Lead and Deputy edit</field>
+        <field name="model_id" ref="model_envcare_workshop"/>
+        <field name="domain_force">['|', '|', ('workshop_lead_id', '=', user.id), ('workshop_deputy_id', '=', user.id), ('event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_head_create" model="ir.rule">
+        <field name="name">EC Workshop: Events Head creates under own events</field>
+        <field name="model_id" ref="model_envcare_workshop"/>
+        <field name="domain_force">[('event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_event_head'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_it_all" model="ir.rule">
+        <field name="name">EC Workshop: IT full access</field>
+        <field name="model_id" ref="model_envcare_workshop"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- Workshop lines (items, budget, accounts, document URLs): same people as the workshop -->
+    <record id="rule_envcare_workshop_items_read_all" model="ir.rule">
+        <field name="name">EC Workshop Item: users read all</field>
+        <field name="model_id" ref="model_envcare_workshop_items"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_items_team" model="ir.rule">
+        <field name="name">EC Workshop Item: Events Head of the event, Lead and Deputy edit</field>
+        <field name="model_id" ref="model_envcare_workshop_items"/>
+        <field name="domain_force">['|', '|', ('workshop_id.workshop_lead_id', '=', user.id), ('workshop_id.workshop_deputy_id', '=', user.id), ('workshop_id.event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_items_it_all" model="ir.rule">
+        <field name="name">EC Workshop Item: IT full access</field>
+        <field name="model_id" ref="model_envcare_workshop_items"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="rule_envcare_workshop_budgets_read_all" model="ir.rule">
+        <field name="name">EC Workshop Budget: users read all</field>
+        <field name="model_id" ref="model_envcare_workshop_budgets"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_budgets_team" model="ir.rule">
+        <field name="name">EC Workshop Budget: Events Head of the event, Lead and Deputy edit</field>
+        <field name="model_id" ref="model_envcare_workshop_budgets"/>
+        <field name="domain_force">['|', '|', ('workshop_id.workshop_lead_id', '=', user.id), ('workshop_id.workshop_deputy_id', '=', user.id), ('workshop_id.event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_budgets_it_all" model="ir.rule">
+        <field name="name">EC Workshop Budget: IT full access</field>
+        <field name="model_id" ref="model_envcare_workshop_budgets"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="rule_envcare_workshop_accounts_read_all" model="ir.rule">
+        <field name="name">EC Workshop Accounts: users read all</field>
+        <field name="model_id" ref="model_envcare_workshop_accounts"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_accounts_team" model="ir.rule">
+        <field name="name">EC Workshop Accounts: Events Head of the event, Lead and Deputy edit</field>
+        <field name="model_id" ref="model_envcare_workshop_accounts"/>
+        <field name="domain_force">['|', '|', ('workshop_id.workshop_lead_id', '=', user.id), ('workshop_id.workshop_deputy_id', '=', user.id), ('workshop_id.event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_accounts_it_all" model="ir.rule">
+        <field name="name">EC Workshop Accounts: IT full access</field>
+        <field name="model_id" ref="model_envcare_workshop_accounts"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+    <record id="rule_envcare_workshop_docs_read_all" model="ir.rule">
+        <field name="name">EC Workshop Document URL: users read all</field>
+        <field name="model_id" ref="model_envcare_workshop_docs"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_docs_team" model="ir.rule">
+        <field name="name">EC Workshop Document URL: Events Head of the event, Lead and Deputy edit</field>
+        <field name="model_id" ref="model_envcare_workshop_docs"/>
+        <field name="domain_force">['|', '|', ('workshop_id.workshop_lead_id', '=', user.id), ('workshop_id.workshop_deputy_id', '=', user.id), ('workshop_id.event_id.create_uid', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_envcare_workshop_docs_it_all" model="ir.rule">
+        <field name="name">EC Workshop Document URL: IT full access</field>
+        <field name="model_id" ref="model_envcare_workshop_docs"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('environmental_care.group_envcare_it'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
     <!-- ================= HR DATA ================= -->
     <!-- Sevak Sr No: SEV-0001, SEV-0002 ... -->
     <data noupdate="1">
@@ -173,4 +341,7 @@
 
     <!-- On install / upgrade: fill Departments / Roles from the groups users already have -->
     <function model="res.users" name="_envcare_sync_all_from_groups"/>
+
+    <!-- On upgrade: old workshop Status "Canceled" -> new Canceled switch (no-op afterwards) -->
+    <function model="envcare.workshop" name="_envcare_migrate_canceled_state"/>
 </odoo>

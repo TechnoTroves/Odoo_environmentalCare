@@ -109,8 +109,6 @@ class EnvEventWebsite(EnvCareWebsiteMixin, http.Controller):
             "form_action": f"/event/update/{event.id}" if event else "/event/create",
             "status_options": self._status_options(),
             # Workshops table
-            "ws_state_options": self._ws_state_options(),
-            "ws_status": self._workshop_status_info(event),
             "sevaks": self._sevak_options(),
             "new_workshops": self._new_workshop_rows() if error else [],
             "can_delete_workshops": request.env["envcare.workshop"].has_access("unlink"),
@@ -121,23 +119,16 @@ class EnvEventWebsite(EnvCareWebsiteMixin, http.Controller):
     def _status_options(self):
         return request.env["envcare.event"]._fields["status"]._description_selection(request.env)
 
-    def _ws_state_options(self):
-        return request.env["envcare.workshop"]._fields["state"]._description_selection(request.env)
-
-    def _workshop_status_info(self, event):
-        """Per workshop: status dropdown options (role based) + "i" button info."""
-        return {ws.id: ws._envcare_status_info() for ws in event.workshop_ids} if event else {}
-
     def _new_workshop_rows(self):
         """New workshop rows as typed in the form (to show them again after an error)."""
         form = request.httprequest.form
         rows = zip(
             form.getlist("ws_new_name"), form.getlist("ws_new_lead"), form.getlist("ws_new_deputy"),
-            form.getlist("ws_new_start"), form.getlist("ws_new_end"), form.getlist("ws_new_state"),
+            form.getlist("ws_new_start"), form.getlist("ws_new_end"),
         )
         return [
             {"name": n, "lead": l, "deputy": d, "start": st, "end": en}
-            for n, l, d, st, en, _sta in rows
+            for n, l, d, st, en in rows
         ]
 
     def _workshop_vals(self, event, name, lead, deputy, start, end):
@@ -175,36 +166,31 @@ class EnvEventWebsite(EnvCareWebsiteMixin, http.Controller):
         form = request.httprequest.form
         Workshop = request.env["envcare.workshop"]
         can_delete = Workshop.has_access("unlink")
-        # Existing workshops: update or delete
+        # Existing workshops: update, cancel / un-cancel or delete.
+        # Rows the user can't edit are disabled in the form (not posted);
+        # write() checks the rights again on the server.
         for ws in event.workshop_ids:
             prefix = f"ws_{ws.id}_"
-            if f"{prefix}name" not in form:
-                continue
             if can_delete and form.get(f"{prefix}delete"):
                 ws.unlink()
                 continue
-            vals = self._workshop_vals(
-                event, form.get(f"{prefix}name"), form.get(f"{prefix}lead"), form.get(f"{prefix}deputy"),
-                form.get(f"{prefix}start"), form.get(f"{prefix}end"),
-            )
-            changed = {
-                key: value for key, value in vals.items()
-                if (ws[key].id if key.endswith("_id") else ws[key]) != value
-            }
-            if changed:
-                ws.write(changed)
-            # Status: only after the content is saved, and only to a status
-            # the workshop is ready for (same list as the dropdown)
-            requested = form.get(f"{prefix}state")
-            if requested and requested != ws.state:
-                if requested not in ws._get_website_state_options():
-                    labels = dict(self._ws_state_options())
-                    missing = ws._get_missing_fields_for(requested)
-                    raise ValidationError(
-                        f"Workshop '{ws.name}' cannot move to '{labels.get(requested, requested)}' yet."
-                        + (f" Please fill: {', '.join(missing)}." if missing else "")
-                    )
-                ws._apply_website_state(requested)
+            canceled = bool(form.get(f"{prefix}canceled"))
+            cancel_changed = ws.can_cancel and f"{prefix}canceled_shown" in form and canceled != ws.is_canceled
+            if cancel_changed and not canceled:
+                ws.write({"is_canceled": False})  # un-cancel first, then it can be edited
+            if f"{prefix}name" in form and ws._envcare_can_edit():
+                vals = self._workshop_vals(
+                    event, form.get(f"{prefix}name"), form.get(f"{prefix}lead"), form.get(f"{prefix}deputy"),
+                    form.get(f"{prefix}start"), form.get(f"{prefix}end"),
+                )
+                changed = {
+                    key: value for key, value in vals.items()
+                    if (ws[key].id if key.endswith("_id") else ws[key]) != value
+                }
+                if changed:
+                    ws.write(changed)
+            if cancel_changed and canceled:
+                ws.write({"is_canceled": True})
         # New workshops
         for row in self._new_workshop_rows():
             if not (row["name"] or "").strip() and not row["lead"] and not row["deputy"]:
